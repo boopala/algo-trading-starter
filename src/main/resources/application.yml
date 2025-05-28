@@ -1,0 +1,33 @@
+#debug: true
+jasypt:
+  encryptor:
+    password: ${ENCRYPTION_SECRET_KEY}  # pass this via environment variable or JVM arg
+    algorithm: PBEWITHSHA256AND256BITAES-CBC-BC
+    provider-class: org.bouncycastle.jce.provider.BouncyCastleProvider
+    iv-generator-classname: org.jasypt.iv.RandomIvGenerator
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/algotrading?currentSchema=algo_dev
+    username: algotradinguser
+    password: ENC(xMcc+WJjFdgEA1Vsqs+We0PHCB6URFr9M7Wd2mqA1WKjfJjzuuxJFdqnKfff46cZFkmH1nntlCSf9V9+5ovQlg==)
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    default-schema: algo_dev  # Optional: if you're using a non-default schema
+    drop-first: false            # true if you want to drop and re-create DB on each run (careful!)
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+kite:
+  api-key: ENC(txT3XZpIKfqfA3wjQZP69nn5O9QsE8S0WBOhjozdYraqO02a5ze1kdfFY3i4Qs8FrudJ3kdu8ACWv9dHz1S0Pg==)
+  api-secret: ENC(gWjNXzc7jWRgmU6BCX3wJA2Jw7y9tB7bRfA8BrUDlGDBAQmyOa1+OzGP6wstsqjjVwtzb5CuhaGb9ImwPh+9O2TxwuhDohryY1MdheIQqFo=)
+  login-url: https://kite.zerodha.com/connect/login?v=3&api_key=
+  trade-url: https://api.kite.trade
+logging:
+  level:
+    org.springframework.boot.context.properties: DEBUG

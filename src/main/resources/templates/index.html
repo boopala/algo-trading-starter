@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" th:href="@{/css/styles.css}">
+</head>
+<body>
+<div class="card">
+    <h2>Welcome, <span th:text="${profile.userName}">User</span>!</h2>
+    <p>Broker: <span th:text="${profile.broker}">Zerodha</span></p>
+    <p>Exchange Segments:
+        <span th:each="ex, iterStat : ${profile.exchanges}">
+            <span th:text="${ex}"></span><span th:if="${!iterStat.last}">, </span>
+        </span>
+    </p>
+</div>
+<div class="card">
+    <h3>Investment Summary</h3>
+    <table class="summary-table">
+        <thead>
+        <tr>
+            <th>Total Investment</th>
+            <th>Current Value</th>
+            <th>Day Change</th>
+            <th>Total P&amp;L</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>
+                <span th:text="'₹' + ${T(java.lang.String).format('%.2f', totalInvested)}">₹0.00</span>
+            </td>
+            <td>
+                <span th:text="'₹' + ${T(java.lang.String).format('%.2f', totalCurrentValue)}">₹0.00</span>
+            </td>
+            <td>
+                <span th:classappend="${totalDayChange >= 0} ? 'profit' : 'loss'"
+                      th:text="'₹' + ${T(java.lang.String).format('%.2f', totalDayChange)}">₹0.00</span>
+            </td>
+            <td>
+                <span th:classappend="${totalPnl >= 0} ? 'profit' : 'loss'"
+                      th:text="'₹' + ${T(java.lang.String).format('%.2f', totalPnl)}">₹0.00</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+<div class="card">
+    <h3>Your Holdings</h3>
+    <table class="holdings-table">
+        <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>Quantity</th>
+            <th>Avg.Price</th>
+            <th>LTP</th>
+            <th>Invested</th>
+            <th>Current</th>
+            <th>P&L</th>
+            <th>Day Change</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:if="${holdings == null or #lists.isEmpty(holdings)}">
+            <td colspan="5">No holdings available</td>
+        </tr>
+        <tr th:each="h : ${holdings}">
+            <td th:text="${h.tradingSymbol}"></td>
+            <td th:text="${h.quantity}"></td>
+            <!--<td th:text="${h.averagePrice}"></td>-->
+            <td th:text="${h.averagePrice != null ? T(java.lang.String).format('%.2f', h.averagePrice) : '0.00'}"></td>
+            <td th:text="${h.lastPrice}"></td>
+            <!--<td th:text="${h.pnl}"></td>-->
+            <td th:text="${T(java.lang.String).format('%.2f', h.quantity * h.averagePrice)}"></td>
+            <td th:text="${T(java.lang.String).format('%.2f', h.quantity * h.lastPrice)}"></td>
+            <td th:text="${h.pnl != null ? T(java.lang.String).format('%.2f', h.pnl) : '0.00'}"
+                th:classappend="${h.pnl >= 0} ? 'profit' : 'loss'"></td>
+            <td th:text="${T(java.lang.String).format('%.2f', h.quantity * h.dayChange)}"
+                th:classappend="${h.dayChange >= 0} ? 'profit' : 'loss'"></td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

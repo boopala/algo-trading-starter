@@ -1,0 +1,78 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd">
+
+    <changeSet id="3" author="boopal">
+        <createTable tableName="segment">
+            <column name="segment_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="VARCHAR(255)" />
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <createTable tableName="exchange">
+            <column name="exchange_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="VARCHAR(255)" />
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <createTable tableName="instrument_type">
+            <column name="instrument_type_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="VARCHAR(255)" />
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <createTable tableName="equity_name">
+            <column name="equity_name_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="VARCHAR(255)" />
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <rollback>
+            <dropTable tableName="segment"/>
+            <dropTable tableName="exchange"/>
+            <dropTable tableName="instrument_type"/>
+            <dropTable tableName="instrument_name"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="4" author="user">
+        <createTable tableName="equity">
+            <column name="equity_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="instrument_token" type="VARCHAR(100)" />
+            <column name="exchange_token" type="VARCHAR(100)" />
+            <column name="trading_symbol" type="VARCHAR(100)" />
+            <column name="equity_name_id" type="BIGINT"/>
+            <column name="instrument_type_id" type="BIGINT"/>
+            <column name="segment_id" type="BIGINT"/>
+            <column name="exchange_id" type="BIGINT"/>
+            <column name="is_deleted" type="BOOLEAN" defaultValue="false"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <addForeignKeyConstraint constraintName="fk_equity_segment"
+                                 baseTableName="equity" baseColumnNames="segment_id"
+                                 referencedTableName="segment" referencedColumnNames="segment_id"/>
+        <addForeignKeyConstraint constraintName="fk_equity_exchange"
+                                 baseTableName="equity" baseColumnNames="exchange_id"
+                                 referencedTableName="exchange" referencedColumnNames="exchange_id"/>
+        <addForeignKeyConstraint constraintName="fk_equity_instr_type"
+                                 baseTableName="equity" baseColumnNames="instrument_type_id"
+                                 referencedTableName="instrument_type" referencedColumnNames="instrument_type_id"/>
+        <addForeignKeyConstraint constraintName="fk_equity_name"
+                                 baseTableName="equity" baseColumnNames="equity_name_id"
+                                 referencedTableName="equity_name" referencedColumnNames="equity_name_id"/>
+
+        <rollback>
+            <dropTable tableName="equity"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
