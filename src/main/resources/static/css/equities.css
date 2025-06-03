@@ -1,0 +1,55 @@
+/* Style container */
+#equitiesSection {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+
+/* Style input and buttons */
+#equitiesSection input[type="text"],
+#equitiesSection input[type="date"],
+#equitiesSection select,
+#equitiesSection button {
+    margin: 5px;
+    padding: 6px 10px;
+    font-size: 14px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+/* Table styling */
+#equitiesSection table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+#equitiesSection th,
+#equitiesSection td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+    font-size: 14px;
+}
+
+/* Table header styling */
+#equitiesSection th {
+    background-color: #f5f5f5;
+    font-weight: bold;
+    color: #333;
+}
+
+/* Zebra row effect */
+#equitiesSection tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+/* Hover effect */
+#equitiesSection tr:hover {
+    background-color: #f1f1f1;
+}
+
+/* Pagination and date range section */
+#equitiesSection div {
+    margin-top: 15px;
+}

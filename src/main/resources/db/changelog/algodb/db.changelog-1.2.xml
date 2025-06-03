@@ -1,0 +1,13 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd">
+    <changeSet id="5" author="boopal">
+        <dropColumn tableName="segment" columnName="created_dt" />
+        <dropColumn tableName="exchange" columnName="created_dt" />
+        <dropColumn tableName="instrument_type" columnName="created_dt" />
+        <dropColumn tableName="equity_name" columnName="created_dt" />
+        <dropColumn tableName="equity" columnName="created_dt" />
+    </changeSet>
+</databaseChangeLog>

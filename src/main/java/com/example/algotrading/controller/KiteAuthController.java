@@ -7,7 +7,9 @@ import com.example.algotrading.service.UserTokenService;
 import com.example.algotrading.util.CommonUtil;
 import com.zerodhatech.kiteconnect.kitehttp.exceptions.KiteException;
 import com.zerodhatech.models.Holding;
+import com.zerodhatech.models.Position;
 import com.zerodhatech.models.Profile;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -17,9 +19,11 @@ import org.springframework.web.servlet.view.RedirectView;
 
 import javax.servlet.http.HttpSession;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Controller
+@Slf4j
 public class KiteAuthController {
 
     private final KiteService kiteService;
@@ -35,38 +39,47 @@ public class KiteAuthController {
 
     @GetMapping("/login")
     public RedirectView kiteLogin() throws KiteException {
+        log.info("kiteLogin entry");
         return new RedirectView(kiteService.generateLoginUrl());
     }
 
     @GetMapping("/login/callback")
     public String kiteCallback(@RequestParam("request_token") String requestToken, HttpSession session) throws KiteException {
+        String methodName = "kiteCallback ";
+        log.info(methodName + "entry");
         try {
             TokenResponse tokenResponse = kiteService.generateAccessToken(requestToken);
             session.setAttribute("user_id", tokenResponse.getUserId());
+            log.debug(methodName + "access token generated from kite successfully");
             return "redirect:/dashboard";
-
         } catch (Exception e) {
+            log.error(methodName + "exception occurred", e);
             session.setAttribute("message", "Failed to generate token: " + e.getMessage());
         }
+        log.info(methodName + "exit");
         return "redirect:/dashboard"; // thymeleaf template
     }
 
     @GetMapping("/dashboard")
     public String getDashboard(HttpSession session, Model model) throws Exception, KiteException {
+        String methodName = "getDashboard ";
+        log.info(methodName + "entry");
         String userId = (String) session.getAttribute("user_id");
-
         Optional<String> encryptedToken = userTokenService.getAccessTokenByUserId(userId);
         if (encryptedToken.isEmpty()) {
-            return "redirect:/login"; // Or show error
+            log.info(methodName + "Access token unavailable for userId");
+            return "redirect:/login";
         }
-
         String accessToken = encryptionService.decrypt(encryptedToken.get());
         Profile profile = kiteService.getUserProfile(accessToken, userId);
         List<Holding> holdings = kiteService.getHoldings(accessToken, userId);
+        Map<String, List<Position>> positionMap = kiteService.getPositions(accessToken, userId);
         CommonUtil.setAdditionalAttributes(model, holdings);
         model.addAttribute("profile", profile);
         model.addAttribute("holdings", holdings);
-
+        model.addAttribute("positions", positionMap.get("net"));
+        log.info(methodName + "holding fetched size {}, position fetched size {}", holdings.size(), positionMap.get("net").size());
+        log.info(methodName + "exit");
         return "index";
     }
 

@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 public abstract class BaseEntity {
 
     @CreationTimestamp
-    @Column(name = "created_dt", updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
 }

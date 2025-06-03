@@ -2,6 +2,7 @@ package com.example.algotrading.service;
 
 import com.example.algotrading.data.entity.*;
 import com.example.algotrading.data.repository.*;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -17,6 +18,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class EquityBatchService {
 
     @Autowired
@@ -31,7 +33,10 @@ public class EquityBatchService {
     private EquityNameRepository equityNameRepository;
 
     public void processCsvAndSyncEquities(InputStream csvInputStream) throws IOException {
-
+        String methodName = "processCsvAndSyncEquities ";
+        log.info(methodName + "entry");
+        int insertCount = 0;
+        int updateCount = 0;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(csvInputStream))) {
             CSVFormat format = CSVFormat.DEFAULT.builder()
                     .setHeader()             // Tells the parser to use the first record as header
@@ -47,11 +52,11 @@ public class EquityBatchService {
             Set<String> instrumentTokens = equities.stream()
                     .map(Equity::getInstrumentToken)
                     .collect(Collectors.toSet());
-
+            log.debug(methodName + "segments: {}, exchange: {}, instrumentType: {}, equityName: {}, equity: {}", segments.size(), exchanges.size(), instrumentTypes.size(), equityNames.size(), equities.size());
             List<CSVRecord> filteredRecords = parser.getRecords().stream().filter(record ->
                             record.get("exchange").startsWith("NSE") || record.get("exchange").startsWith("BSE"))
                     .collect(Collectors.toList());
-
+            log.debug(methodName + "csv filtered records: {}", filteredRecords.size());
             for (CSVRecord record : filteredRecords) {
                 String instrumentToken = record.get("instrument_token");
                 if (!instrumentTokens.contains(instrumentToken)) {
@@ -123,6 +128,7 @@ public class EquityBatchService {
                     }
                     equity.setDeleted(false);
                     equityRepository.save(equity);
+                    insertCount += 1;
                 }
 
             }
@@ -135,10 +141,13 @@ public class EquityBatchService {
                 if (!excelInstrumentTokens.contains(e.getInstrumentToken())) {
                     e.setDeleted(true);
                     equityRepository.save(e);
+                    updateCount += 1;
                 }
             }
 
         }
+        log.info(methodName + "insertCount: {}, updateCount: {}", insertCount, updateCount);
+        log.info(methodName + "exit");
     }
 
 }

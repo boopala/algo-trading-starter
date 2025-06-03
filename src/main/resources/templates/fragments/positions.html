@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Holdings</title>
+    <link rel="stylesheet" th:href="@{/css/styles.css?v=1.2}">
+    <link rel="stylesheet" href="/css/equities.css?v=1.2">
+    <link rel="stylesheet" href="/css/backtest.css?v=1.2">
+    <!--<script th:src="@{/js/historicaldata.js?v=1.2}"></script>-->
+    <script th:src="@{/js/backtest.js?v=1.2}"></script>
+    <script th:src="@{/js/dashboard.js?v=1.2}"></script>
+</head>
+<body>
+<!-- fragments/holdings.html -->
+<div th:fragment="positionsPanel">
+    <table class="position-table">
+        <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>Exchange</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Avg Price</th>
+            <th>Last Price</th>
+            <th>P&L</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:if="${positions == null or #lists.isEmpty(positions)}">
+            <td colspan="7">No positions available</td>
+        </tr>
+        <tr th:each="p : ${positions}">
+            <td th:text="${p.tradingSymbol}"></td>
+            <td th:text="${p.exchange}"></td>
+            <td th:text="${p.product}"></td>
+            <td th:text="${p.netQuantity}"></td>
+            <td th:text="'₹' + ${T(java.lang.String).format('%.2f', p.averagePrice)}"></td>
+            <td th:text="'₹' + ${T(java.lang.String).format('%.2f', p.lastPrice)}"></td>
+            <td th:text="'₹' + ${T(java.lang.String).format('%.2f', p.pnl)}"
+                th:classappend="${p.pnl >= 0} ? 'profit' : 'loss'"></td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

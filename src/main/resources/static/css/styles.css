@@ -40,12 +40,12 @@ body {
     font-weight: bold;
 }
 
-.holdings-table {
+.holdings-table, .position-table {
     width: 100%;
     border-collapse: collapse;
 }
 
-.holdings-table th, .holdings-table td {
+.holdings-table th, .holdings-table td, .position-table th, .position-table td {
     vertical-align: middle;
     padding: 10px;
     border-bottom: 1px solid #ccc;
@@ -63,14 +63,6 @@ body {
     font-weight: bold;
 }
 
-.profit {
-    color: green;
-}
-
-.loss {
-    color: red;
-}
-
 .summary-table {
     width: 100%;
     border-collapse: collapse;
@@ -81,6 +73,34 @@ body {
     padding: 8px;
     text-align: center;
 }
-.summary-table th, .holdings-table th {
+.summary-table th, .holdings-table th, .position-table th {
     background-color: #f4f4f4;
+}
+
+/* Panel Tabs CSS */
+.panel-tabs {
+    display: flex;
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 1em;
+}
+.panel-tab {
+    padding: 0.5em 1.5em;
+    cursor: pointer;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    background: #f8f8f8;
+    font-weight: bold;
+    margin-right: 0.5em;
+    border-radius: 8px 8px 0 0;
+}
+.panel-tab.active {
+    background: #fff;
+    border-bottom: 2px solid #fff;
+    color: #1976d2;
+}
+.panel-content {
+    display: none;
+}
+.panel-content.active {
+    display: block;
 }

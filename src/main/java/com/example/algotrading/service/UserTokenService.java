@@ -4,6 +4,7 @@ import com.example.algotrading.data.entity.UserToken;
 import com.example.algotrading.data.entity.UserTokenHistory;
 import com.example.algotrading.data.repository.UserTokenHistoryRepository;
 import com.example.algotrading.data.repository.UserTokenRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -11,6 +12,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 @Service
+@Slf4j
 public class UserTokenService {
 
     private final UserTokenRepository userTokenRepository;
@@ -25,6 +27,8 @@ public class UserTokenService {
     }
 
     public void saveOrUpdateToken(String userId, String accessToken) {
+        String methodName = "saveOrUpdateToken ";
+        log.info(methodName + "entry");
         UserToken token = new UserToken();
         token.setUserId(userId);
         token.setCreatedAt(Instant.now());
@@ -37,11 +41,15 @@ public class UserTokenService {
         history.setUserId(userId);
         history.setAccessToken(encryptedToken);
         history.setCreatedAt(Instant.now());
-
         userTokenHistoryRepository.save(history);
+        log.info(methodName + "exit");
     }
 
     public Optional<String> getAccessTokenByUserId(String userId) {
-        return userTokenRepository.findById(userId).map(UserToken::getAccessToken);
+        String methodName = "getAccessTokenByUserId ";
+        log.info(methodName + "entry");
+        Optional<String> accessToken = userTokenRepository.findById(userId).map(UserToken::getAccessToken);
+        log.info(methodName + "exit");
+        return accessToken;
     }
 }

@@ -4,16 +4,20 @@ import com.example.algotrading.model.response.*;
 import com.zerodhatech.kiteconnect.KiteConnect;
 import com.zerodhatech.kiteconnect.kitehttp.exceptions.KiteException;
 import com.zerodhatech.models.Holding;
+import com.zerodhatech.models.Position;
 import com.zerodhatech.models.Profile;
 import com.zerodhatech.models.User;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @Service
+@Slf4j
 public class KiteService {
     @Value("${kite.api-key}")
     private String apiKey;
@@ -28,10 +32,17 @@ public class KiteService {
     UserTokenService userTokenService;
 
     public String generateLoginUrl() {
-        return kiteLoginUrl + apiKey;
+        String methodName = "generateLoginUrl ";
+        log.info(methodName + "entry");
+        String loginUrl = kiteLoginUrl + apiKey;
+        log.debug(methodName + "kiteLoginUrl: {}", kiteLoginUrl);
+        log.info(methodName + "exit");
+        return loginUrl;
     }
 
     public TokenResponse generateAccessToken(String requestToken) throws Exception, KiteException {
+        String methodName = "generateAccessToken ";
+        log.info(methodName + "entry");
         KiteConnect kiteConnect = new KiteConnect(apiKey);
         // Get access token using request token
         User user = kiteConnect.generateSession(requestToken, apiSecret);
@@ -39,29 +50,50 @@ public class KiteService {
 
         kiteConnect.setAccessToken(user.accessToken);
         kiteConnect.setPublicToken(user.publicToken);
-
-        // Optional: Store access token in DB or file here
         userTokenService.saveOrUpdateToken(user.userId, user.accessToken);
 
-        // Return response DTO
         TokenResponse response = new TokenResponse();
         response.setAccessToken(user.accessToken);
         response.setPublicToken(user.publicToken);
         response.setUserId(user.userId);
+        log.info(methodName + "exit");
         return response;
     }
 
     public Profile getUserProfile(String accessToken, String userId) throws IOException, KiteException {
+        String methodName = "getUserProfile ";
+        log.info(methodName + "entry");
         KiteConnect kiteConnect = new KiteConnect(apiKey);
         kiteConnect.setUserId(userId);
         kiteConnect.setAccessToken(accessToken);
+        log.info(methodName + "exit");
         return kiteConnect.getProfile();
     }
 
     public List<Holding> getHoldings(String accessToken, String userId) throws IOException, KiteException {
+        String methodName = "getHoldings ";
+        log.info(methodName + "entry");
         KiteConnect kiteConnect = new KiteConnect(apiKey);
         kiteConnect.setUserId(userId);
         kiteConnect.setAccessToken(accessToken);
-        return kiteConnect.getHoldings();
+        List<Holding> holdings = kiteConnect.getHoldings();
+        log.debug(methodName + "holdings size: {}", holdings.size());
+        log.info(methodName + "exit");
+        return holdings;
     }
+
+    public Map<String, List<Position>> getPositions(String accessToken, String userId) throws IOException, KiteException {
+        String methodName = "getPositions ";
+        log.info(methodName + "entry");
+        KiteConnect kiteConnect = new KiteConnect(apiKey);
+        kiteConnect.setUserId(userId);
+        kiteConnect.setAccessToken(accessToken);
+        Map<String, List<Position>> positionsMap = kiteConnect.getPositions();
+        log.debug(methodName + "position net size: {}", positionsMap.get("net").size());
+        log.debug(methodName + "position day size: {}", positionsMap.get("day").size());
+        log.info(methodName + "exit");
+        return positionsMap;
+    }
+
+
 }

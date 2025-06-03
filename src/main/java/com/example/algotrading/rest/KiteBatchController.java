@@ -1,6 +1,7 @@
-package com.example.algotrading.controller;
+package com.example.algotrading.rest;
 
 import com.example.algotrading.batch.EquityBatchScheduler;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api")
+@Slf4j
 public class KiteBatchController {
 
     @Autowired
@@ -16,12 +18,18 @@ public class KiteBatchController {
 
     @PostMapping("/fetchInstruments")
     public String runBatchJob() {
+        String methodName = "runBatchJob ";
+        log.info(methodName + "entry");
+        String message;
         try {
             equityBatchScheduler.fetchKiteInstruments();
-            return "Fetch is successful";
+            message = "Fetch is successful";
         } catch (Exception e) {
-            return "Fetch failed: " + e.getMessage();
+            log.error(methodName + "Exception occurred ", e);
+            message = "Fetch failed: " + e.getMessage();
         }
+        log.info(methodName + "exit");
+        return message;
     }
 
 }
