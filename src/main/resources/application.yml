@@ -3,7 +3,7 @@ jasypt:
   encryptor:
     password: ${ENCRYPTION_SECRET_KEY}  # pass this via environment variable or JVM arg
     algorithm: PBEWITHSHA256AND256BITAES-CBC-BC
-    provider-class: org.bouncycastle.jce.provider.BouncyCastleProvider
+    provider-class-name: org.bouncycastle.jce.provider.BouncyCastleProvider
     iv-generator-classname: org.jasypt.iv.RandomIvGenerator
 spring:
   datasource:

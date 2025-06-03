@@ -26,7 +26,7 @@ public class KiteBatchController {
             message = "Fetch is successful";
         } catch (Exception e) {
             log.error(methodName + "Exception occurred ", e);
-            message = "Fetch failed: " + e.getMessage();
+            message = "Fetch failed: Check log for more info";
         }
         log.info(methodName + "exit");
         return message;

@@ -40,7 +40,8 @@ public class AlgoDashboardController {
         log.info(methodName + "entry");
         String userId = (String) session.getAttribute("user_id");
         Optional<String> encryptedToken = userTokenService.getAccessTokenByUserId(userId);
-        if (encryptedToken.isEmpty()) {
+        if (encryptgit status
+    edToken.isEmpty()) {
             log.info(methodName + "Access token unavailable for userId");
             return "redirect:/login";
         }
