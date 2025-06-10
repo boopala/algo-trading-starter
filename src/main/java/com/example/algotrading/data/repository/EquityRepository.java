@@ -17,7 +17,7 @@ public interface EquityRepository extends JpaRepository<Equity, String> {
 
     @Query("SELECT e FROM Equity e JOIN e.segment s JOIN e.exchange ex " +
             "WHERE s.id = :segmentId AND ex.id = :exchangeId AND LOWER(e.tradingSymbol) " +
-            "LIKE LOWER(CONCAT('%', :search, '%'))")
+            "LIKE LOWER(CONCAT('%', :search, '%')) AND e.equityName.name != '' AND e.isDeleted = false")
     Page<Equity> findBySegmentIdAndExchangeIdAndTradingSymbolContainingIgnoreCase(
             @Param("segmentId") Long segmentId,
             @Param("exchangeId") Long exchangeId,

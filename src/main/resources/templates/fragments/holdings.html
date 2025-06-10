@@ -1,17 +1,5 @@
-<!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <title>Holdings</title>
-    <link rel="stylesheet" th:href="@{/css/styles.css?v=1.2}">
-    <link rel="stylesheet" href="/css/equities.css?v=1.2">
-    <link rel="stylesheet" href="/css/backtest.css?v=1.2">
-    <script th:src="@{/js/backtest.js?v=1.2}"></script>
-    <script th:src="@{/js/dashboard.js?v=1.2}"></script>
-</head>
-<body>
 <!-- fragments/holdings.html -->
-<div th:fragment="holdingsPanel">
+<div th:fragment="holdingsPanel" xmlns:th="http://www.w3.org/1999/xhtml">
     <table class="holdings-table">
         <thead>
         <tr>
@@ -41,8 +29,15 @@
             <td th:text="${T(java.lang.String).format('%.2f', h.quantity * h.dayChange)}"
                 th:classappend="${h.dayChange >= 0} ? 'profit' : 'loss'"></td>
         </tr>
+        <tr class="total-row">
+            <td colspan="4" style="text-align: right;"><strong>Total:</strong></td>
+            <td th:text="'₹' + ${T(java.lang.String).format('%.2f', totalInvested)}">₹0.00</td>
+            <td th:text="'₹' + ${T(java.lang.String).format('%.2f', totalCurrentValue)}">₹0.00</td>
+            <td th:text="${T(java.lang.String).format('%.2f', totalPnl)}"
+                th:classappend="${totalPnl >= 0} ? 'profit' : 'loss'"></td>
+            <td th:text="${T(java.lang.String).format('%.2f', totalDayChange)}"
+                th:classappend="${totalDayChange >= 0} ? 'profit' : 'loss'"></td>
+        </tr>
         </tbody>
     </table>
 </div>
-</body>
-</html>

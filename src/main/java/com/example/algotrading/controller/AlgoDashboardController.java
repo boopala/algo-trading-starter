@@ -39,19 +39,23 @@ public class AlgoDashboardController {
         String methodName = "getHoldings ";
         log.info(methodName + "entry");
         String userId = (String) session.getAttribute("user_id");
-        Optional<String> encryptedToken = userTokenService.getAccessTokenByUserId(userId);
-        if (encryptgit status
-    edToken.isEmpty()) {
+        if (Optional.ofNullable(userId).isPresent()) {
+            Optional<String> encryptedToken = userTokenService.getAccessTokenByUserId(userId);
+            if (encryptedToken.isEmpty()) {
+                log.info(methodName + "Access token unavailable for userId");
+                return "redirect:/login";
+            }
+            String accessToken = encryptionService.decrypt(encryptedToken.get());
+            List<Holding> holdings = kiteService.getHoldings(accessToken, userId);
+            CommonUtil.setAdditionalAttributes(model, holdings);
+            model.addAttribute("holdings", holdings);
+            log.info(methodName + "holding fetched size {}", holdings.size());
+            log.info(methodName + "exit");
+            return "fragments/holdings :: holdingsPanel";
+        } else {
             log.info(methodName + "Access token unavailable for userId");
             return "redirect:/login";
         }
-        String accessToken = encryptionService.decrypt(encryptedToken.get());
-        List<Holding> holdings = kiteService.getHoldings(accessToken, userId);
-        CommonUtil.setAdditionalAttributes(model, holdings);
-        model.addAttribute("holdings", holdings);
-        log.info(methodName + "holding fetched size {}", holdings.size());
-        log.info(methodName + "exit");
-        return "fragments/holdings :: holdingsPanel";
     }
 
     @GetMapping("/positions")

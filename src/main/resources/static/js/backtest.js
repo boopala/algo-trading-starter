@@ -23,7 +23,7 @@ function renderEquitiesTable(pageData) {
     tbody.innerHTML = pageData.content.map(eq => `
         <tr>
             <td><input type="radio" name="selectedEquity" value="${eq.equityId}"></td>
-            <td>${eq.equityName.name}</td>
+            <td>${eq.tradingSymbol}</td>
             <td>${eq.segment.name}</td>
             <td>${eq.exchange.name}</td>
         </tr>

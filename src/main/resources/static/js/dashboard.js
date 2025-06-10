@@ -1,4 +1,5 @@
 function loadHoldingsPanel() {
+    console.log("Loading holdings...")
     fetch('/holdings')
         .then(res => res.text())
         .then(html => {
@@ -24,11 +25,11 @@ function showPanel(panel) {
     document.getElementById('holdingsPanel').classList.remove('active');
     document.getElementById('positionsPanel').classList.remove('active');
     document.getElementById('backTestPanel').classList.remove('active');
-
     if (panel === 'holdings') {
         document.getElementById('holdingsTab').classList.add('active');
         document.getElementById('holdingsPanel').classList.add('active');
         loadHoldingsPanel();
+        //setInterval(loadHoldingsPanel, 10000);
     } else if (panel === 'positions') {
         document.getElementById('positionsTab').classList.add('active');
         document.getElementById('positionsPanel').classList.add('active');
