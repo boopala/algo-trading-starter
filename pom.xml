@@ -89,6 +89,15 @@
             <artifactId>commons-csv</artifactId>
             <version>1.10.0</version> <!-- Latest as of my cutoff; check for newer if needed -->
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.modelmapper</groupId>
+            <artifactId>modelmapper</artifactId>
+            <version>3.2.3</version>
+        </dependency>
     </dependencies>
 
     <build>

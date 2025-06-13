@@ -1,0 +1,75 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+      http://www.liquibase.org/xml/ns/dbchangelog
+      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="6" author="boopal">
+
+        <!-- Create Table -->
+        <createTable tableName="holding">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="product" type="VARCHAR(50)"/>
+            <column name="last_price" type="DOUBLE PRECISION"/>
+            <column name="price" type="VARCHAR(50)"/>
+            <column name="trading_symbol" type="VARCHAR(100)"/>
+            <column name="t1quantity" type="INT"/>
+            <column name="collateral_quantity" type="VARCHAR(50)"/>
+            <column name="collateraltype" type="VARCHAR(50)"/>
+            <column name="isin" type="VARCHAR(50)"/>
+            <column name="pnl" type="DOUBLE PRECISION"/>
+            <column name="quantity" type="INT"/>
+            <column name="realised_quantity" type="VARCHAR(50)"/>
+            <column name="average_price" type="DOUBLE PRECISION"/>
+            <column name="exchange" type="VARCHAR(20)"/>
+            <column name="instrument_token" type="VARCHAR(50)"/>
+            <column name="used_quantity" type="INT"/>
+            <column name="authorised_quantity" type="INT"/>
+            <column name="authorised_date" type="TIMESTAMP"/>
+            <column name="discrepancy" type="BOOLEAN"/>
+            <column name="day_change" type="DOUBLE PRECISION"/>
+            <column name="day_change_percentage" type="DOUBLE PRECISION"/>
+
+            <!-- Audit columns -->
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_deleted" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <!-- Create function for auto-updating 'updated_at' -->
+        <sql splitStatements="false" stripComments="false" endDelimiter="$$">
+            CREATE OR REPLACE FUNCTION update_updated_at_column()
+            RETURNS TRIGGER AS $$
+            BEGIN
+            NEW.updated_at = CURRENT_TIMESTAMP;
+            RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        </sql>
+
+        <!-- Create trigger using the function -->
+        <sql splitStatements="false">
+            CREATE TRIGGER set_updated_at
+            BEFORE UPDATE ON holding
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+        </sql>
+        <!-- Rollback for function, trigger, and table -->
+        <rollback>
+            DROP TRIGGER IF EXISTS set_updated_at ON holding;
+            DROP FUNCTION IF EXISTS update_updated_at_column();
+            DROP TABLE IF EXISTS holding;
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

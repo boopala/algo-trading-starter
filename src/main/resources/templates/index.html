@@ -4,9 +4,13 @@
     <title>Dashboard</title>
     <link rel="stylesheet" th:href="@{/css/styles.css?v=1.2}">
     <link rel="stylesheet" href="/css/equities.css?v=1.2">
-    <link rel="stylesheet" href="/css/backtest.css?v=1.2">
-    <script th:src="@{/js/backtest.js?v=1.2}"></script>
-    <script th:src="@{/js/dashboard.js?v=1.4}"></script>
+    <link rel="stylesheet" href="/css/backtest.css?v=1.3">
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script th:src="@{/js/backtest.js?v=1.13}"></script>
+    <script th:src="@{/js/dashboard.js?v=1.7}"></script>
 </head>
 <body>
 <div class="card">
@@ -18,37 +22,6 @@
         </span>
     </p>
 </div>
-<!--<div class="card">
-    <h3>Investment Summary</h3>
-    <table class="summary-table">
-        <thead>
-        <tr>
-            <th>Total Investment</th>
-            <th>Current Value</th>
-            <th>Day Change</th>
-            <th>Total P&amp;L</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr>
-            <td>
-                <span th:text="'₹' + ${T(java.lang.String).format('%.2f', totalInvested)}">₹0.00</span>
-            </td>
-            <td>
-                <span th:text="'₹' + ${T(java.lang.String).format('%.2f', totalCurrentValue)}">₹0.00</span>
-            </td>
-            <td>
-                <span th:classappend="${totalDayChange >= 0} ? 'profit' : 'loss'"
-                      th:text="'₹' + ${T(java.lang.String).format('%.2f', totalDayChange)}">₹0.00</span>
-            </td>
-            <td>
-                <span th:classappend="${totalPnl >= 0} ? 'profit' : 'loss'"
-                      th:text="'₹' + ${T(java.lang.String).format('%.2f', totalPnl)}">₹0.00</span>
-            </td>
-        </tr>
-        </tbody>
-    </table>
-</div>-->
 
 <!-- Tab Panel Start -->
 <div class="card">
@@ -139,6 +112,18 @@
             <label>Exchange:
                 <select id="exchangeSelect"></select>
             </label>
+            <label>Interval:
+                <select id="intervalSelect">
+                    <option value="minute">minute</option>
+                    <option value="day">day</option>
+                    <option value="3minute">3minute</option>
+                    <option value="5minute">5minute</option>
+                    <option value="10minute">10minute</option>
+                    <option value="15minute">15minute</option>
+                    <option value="30minute">30minute</option>
+                    <option value="60minute">60minute</option>
+                </select>
+            </label>
             <button id="segmentExchangeSubmit" type="button">Submit</button>
         </div>
 
@@ -171,9 +156,14 @@
                 <button onclick="submitEquity()">Submit Equity</button>
             </div>
         </div>
+        <div id="ohlc-info-bar"></div>
+        <div id="candlestickChart"></div>
     </div>
 </div>
 <!-- Tab Panel End -->
-
+<!--<div style="position: relative;">
+    <div id="ohlc-info-bar"></div>
+    <div id="candlestickChart"></div>
+</div>-->
 </body>
 </html>

@@ -1,12 +1,14 @@
 package com.example.algotrading.controller;
 
+import com.example.algotrading.model.Holding;
 import com.example.algotrading.model.response.*;
 import com.example.algotrading.service.EncryptionService;
 import com.example.algotrading.service.KiteService;
+import com.example.algotrading.service.KiteWebSocketService;
 import com.example.algotrading.service.UserTokenService;
 import com.example.algotrading.util.CommonUtil;
+import com.zerodhatech.kiteconnect.KiteConnect;
 import com.zerodhatech.kiteconnect.kitehttp.exceptions.KiteException;
-import com.zerodhatech.models.Holding;
 import com.zerodhatech.models.Position;
 import com.zerodhatech.models.Profile;
 import lombok.extern.slf4j.Slf4j;
@@ -18,9 +20,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.view.RedirectView;
 
 import javax.servlet.http.HttpSession;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Controller
 @Slf4j
@@ -29,18 +33,23 @@ public class KiteAuthController {
     private final KiteService kiteService;
     private final UserTokenService userTokenService;
     private final EncryptionService encryptionService;
+    private final KiteWebSocketService kiteWebSocketService;
 
     @Autowired
-    public KiteAuthController(KiteService kiteService, UserTokenService userTokenService, EncryptionService encryptionService) {
+    public KiteAuthController(KiteService kiteService, UserTokenService userTokenService, EncryptionService encryptionService, @Autowired(required = false) KiteWebSocketService kiteWebSocketService) {
         this.kiteService = kiteService;
         this.userTokenService = userTokenService;
         this.encryptionService = encryptionService;
+        this.kiteWebSocketService = kiteWebSocketService;
     }
 
     @GetMapping("/login")
     public RedirectView kiteLogin() throws KiteException {
-        log.info("kiteLogin entry");
-        return new RedirectView(kiteService.generateLoginUrl());
+        String methodName = "kiteLogin ";
+        log.info(methodName + "entry");
+        String loginUrl = kiteService.generateLoginUrl();
+        log.debug(methodName + "loginUrl: {}", loginUrl);
+        return new RedirectView(loginUrl);
     }
 
     @GetMapping("/login/callback")
@@ -73,6 +82,10 @@ public class KiteAuthController {
         String accessToken = encryptionService.decrypt(encryptedToken.get());
         Profile profile = kiteService.getUserProfile(accessToken, userId);
         List<Holding> holdings = kiteService.getHoldings(accessToken, userId);
+        if (kiteWebSocketService != null) {
+            kiteWebSocketService.startWebSocket(accessToken, (ArrayList<Long>) holdings.stream().map(Holding::getInstrumentToken)
+                    .map(Long::parseLong).collect(Collectors.toList()));
+        }
         Map<String, List<Position>> positionMap = kiteService.getPositions(accessToken, userId);
         CommonUtil.setAdditionalAttributes(model, holdings);
         model.addAttribute("profile", profile);

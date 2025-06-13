@@ -24,10 +24,18 @@ spring:
     prefix: classpath:/templates/
     suffix: .html
 kite:
-  api-key: ENC(txT3XZpIKfqfA3wjQZP69nn5O9QsE8S0WBOhjozdYraqO02a5ze1kdfFY3i4Qs8FrudJ3kdu8ACWv9dHz1S0Pg==)
-  api-secret: ENC(gWjNXzc7jWRgmU6BCX3wJA2Jw7y9tB7bRfA8BrUDlGDBAQmyOa1+OzGP6wstsqjjVwtzb5CuhaGb9ImwPh+9O2TxwuhDohryY1MdheIQqFo=)
+  api-key: ENC(l8uI0WMqy+3zzn7MEVLiYw064bBlVnqprKwdx17Kh3O0Q0CO4b9oeGbZblLlDdbWBvxqGRyrsfW6A9I70ry+uw==)
+  api-secret: ENC(r8Vzbu7kjL2V7qmRQsPskWccZapm3JuA8x2xnTOFgn62ss+fIClRoC0Vs+m6TI25fN31sLRUrDuCaX1YfW+/MJ9aodHakqzQTt/II6vatos=)
   login-url: https://kite.zerodha.com/connect/login?v=3&api_key=
   trade-url: https://api.kite.trade
+  user-id: QG2526
 logging:
   level:
-    org.springframework.boot.context.properties: DEBUG
+    com:
+      example:
+        algotrading: DEBUG
+live:
+  holdings:
+    websocket:
+      enabled: false
+

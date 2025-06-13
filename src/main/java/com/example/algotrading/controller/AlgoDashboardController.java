@@ -46,7 +46,7 @@ public class AlgoDashboardController {
                 return "redirect:/login";
             }
             String accessToken = encryptionService.decrypt(encryptedToken.get());
-            List<Holding> holdings = kiteService.getHoldings(accessToken, userId);
+            List<com.example.algotrading.model.Holding> holdings = kiteService.getHoldings(accessToken, userId);
             CommonUtil.setAdditionalAttributes(model, holdings);
             model.addAttribute("holdings", holdings);
             log.info(methodName + "holding fetched size {}", holdings.size());
@@ -63,17 +63,22 @@ public class AlgoDashboardController {
         String methodName = "getPositions ";
         log.info(methodName + "entry");
         String userId = (String) session.getAttribute("user_id");
-        Optional<String> encryptedToken = userTokenService.getAccessTokenByUserId(userId);
-        if (encryptedToken.isEmpty()) {
-            log.info(methodName + "Access token unavailable for userId");
+        if (Optional.ofNullable(userId).isPresent()) {
+            Optional<String> encryptedToken = userTokenService.getAccessTokenByUserId(userId);
+            if (encryptedToken.isEmpty()) {
+                log.info(methodName + "Access token unavailable for userId");
+                return "redirect:/login";
+            }
+            String accessToken = encryptionService.decrypt(encryptedToken.get());
+            Map<String, List<Position>> positionMap = kiteService.getPositions(accessToken, userId);
+            model.addAttribute("positions", positionMap.get("net"));
+            log.info(methodName + "position fetched size {}", positionMap.get("net").size());
+            log.info(methodName + "exit");
+            return "fragments/positions :: positionsPanel";
+        } else {
+            log.info(methodName + "userId is null");
             return "redirect:/login";
         }
-        String accessToken = encryptionService.decrypt(encryptedToken.get());
-        Map<String, List<Position>> positionMap = kiteService.getPositions(accessToken, userId);
-        model.addAttribute("positions", positionMap.get("net"));
-        log.info(methodName + "position fetched size {}", positionMap.get("net").size());
-        log.info(methodName + "exit");
-        return "fragments/positions :: positionsPanel";
     }
 
 }

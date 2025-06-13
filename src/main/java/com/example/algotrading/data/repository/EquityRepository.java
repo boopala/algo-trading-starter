@@ -25,4 +25,7 @@ public interface EquityRepository extends JpaRepository<Equity, String> {
             Pageable pageable
     );
 
+    @Query("SELECT e.instrumentToken FROM Equity e WHERE e.id = :id")
+    String findInstrumentTokenById(@Param("id") Long id);
+
 }
