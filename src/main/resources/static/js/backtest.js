@@ -109,188 +109,102 @@ function loadBackTestPanel() {
     });
 }
 
-// You need to include dayjs for date formatting
-// <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
-
-let lastHoveredIndex = null;
-
 function renderCandlestickChart(data) {
-    const chartContainer = document.querySelector('#backTestPanel #candlestickChart');
-    if (!chartContainer) {
-        console.error("Chart container not found in backtest panel.");
-        return;
-    }
-    const categories = data.map(point => point.timeStamp);
+    // Clear previous chart if any
+    document.getElementById('candlestickChart').innerHTML = '';
 
-    const seriesData = data.map((point, idx) => ({
-        x: idx,
-        y: [point.open, point.high, point.low, point.close]
-    }));
-
-    const chartOptions = {
-        chart: {
-            type: 'candlestick',
-            height: 400,
-            id: 'candlestickChart',
-            animations: {
-                enabled: true,
-                easing: 'easeinout',
-                speed: 800,
-            },
-            toolbar: {
-                show: true,
-                tools: {
-                    download: true,
-                    selection: true,
-                    zoom: true,
-                    zoomin: true,
-                    zoomout: true,
-                    pan: true,
-                    reset: true,
-                },
-                autoSelected: 'zoom'
-            },
-            events: {
-                mouseMove: function(event, chartContext, config) {
-                    // Show info bar on hover
-                    if (config.dataPointIndex !== -1 && config.dataPointIndex !== lastHoveredIndex) {
-                        lastHoveredIndex = config.dataPointIndex;
-                        showOhlcInfo(data[config.dataPointIndex]);
-                    }
-                },
-                mouseLeave: function() {
-                    lastHoveredIndex = null;
-                    clearOhlcInfo();
-                },
-                zoomed: function(chartContext, {xaxis}) {
-                    updateXAxisFormat(chartContext, xaxis);
-                }
-            }
-        },
-        plotOptions: {
-            candlestick: {
-                colors: {
-                    upward: '#00e396',
-                    downward: '#ff4560'
-                },
-                wick: {
-                    useFillColor: true,
-                }
-            }
+    // Create the chart
+    const chart = LightweightCharts.createChart(document.getElementById('candlestickChart'), {
+        width: document.getElementById('candlestickChart').offsetWidth,
+        height: 450,
+        layout: {
+            background: { color: '#fff' },
+            textColor: '#222',
         },
         grid: {
-            show: true,
-            borderColor: '#e7e7e7',
-            strokeDashArray: 4,
-            position: 'back',
-            xaxis: { lines: { show: true } },
-            yaxis: { lines: { show: true } },
+            vertLines: { color: '#eee' },
+            horzLines: { color: '#eee' },
         },
-        tooltip: {
-            enabled: false // We'll use our own info bar
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
         },
-        series: [{
-            name: "Price",
-            data: seriesData
-        }],
-        xaxis: {
-            type: 'category',
-            categories: categories,
-            labels: {
-                rotate: -45,
-                formatter: function(val, idx) {
-                    if (!categories[idx]) return '';
-                    // Default to date, will update on zoom
-                    return dayjs(categories[idx]).format('DD MMM YYYY');
-                },
-                style: { colors: '#333', fontSize: '12px' }
-            },
-            tooltip: {
-                enabled: false
-            }
+        timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+            borderColor: '#ccc'
         },
-        yaxis: {
-            tooltip: { enabled: true },
-            labels: { style: { colors: '#333', fontSize: '12px' } }
-        },
-        title: {
-            text: 'Candlestick Chart',
-            align: 'left',
-            style: { fontSize: '20px', color: '#263238' }
-        }
-    };
-
-    // Destroy old chart if exists
-    if (window.candleChart) {
-        window.candleChart.destroy();
-    }
-    window.candleChart = new ApexCharts(document.querySelector("#backTestPanel #candlestickChart"), chartOptions);
-    window.candleChart.render();
-
-    // Show the latest candle's info on initial load
-    showOhlcInfo(data[data.length - 1]);
-}
-
-// Info bar logic
-function showOhlcInfo(point) {
-    const ohlcBar = document.getElementById('ohlc-info-bar');
-    if (!point) return;
-    ohlcBar.innerHTML = `
-        <span class="ohlc-label">O</span> ${point.open}
-        <span class="ohlc-label">H</span> ${point.high}
-        <span class="ohlc-label">L</span> ${point.low}
-        <span class="ohlc-label">C</span> ${point.close}
-        <span class="ohlc-label">Date</span> ${dayjs(point.timeStamp).format('DD MMM YYYY')}
-    `;
-    ohlcBar.style.display = 'flex';
-}
-
-function clearOhlcInfo() {
-    const ohlcBar = document.getElementById('ohlc-info-bar');
-    ohlcBar.innerHTML = '';
-    ohlcBar.style.display = 'none';
-}
-
-function updateXAxisFormat(chartContext, xaxis) {
-    // xaxis.min and xaxis.max are indices for category axis
-    // Get your categories array (timestamps as ISO strings)
-    const categories = chartContext.w.globals.labels;
-    if (!categories || categories.length === 0) return;
-
-    // Convert indices to actual time values
-    const minIdx = Math.max(Math.floor(xaxis.min), 0);
-    const maxIdx = Math.min(Math.ceil(xaxis.max), categories.length - 1);
-
-    const minDate = new Date(categories[minIdx]);
-    const maxDate = new Date(categories[maxIdx]);
-    const MS_PER_DAY = 24 * 60 * 60 * 1000;
-    const daysVisible = Math.max(1, (maxDate - minDate) / MS_PER_DAY);
-
-    // Decide label format
-    let formatter;
-    if (daysVisible <= 7) {
-        // Show date and time if zoomed in to a week or less
-        formatter = function(val, idx) {
-            if (!categories[idx]) return '';
-            const d = new Date(categories[idx]);
-            return d.toLocaleString(undefined, { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' });
-        };
-    } else {
-        // Show only date if zoomed out
-        formatter = function(val, idx) {
-            if (!categories[idx]) return '';
-            const d = new Date(categories[idx]);
-            return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: '2-digit' });
-        };
-    }
-
-    // Update chart x-axis labels
-    chartContext.updateOptions({
-        xaxis: {
-            labels: {
-                formatter: formatter
-            }
+        rightPriceScale: {
+            borderColor: '#ccc'
         }
     });
-}
 
+    // Prepare candlestick data
+    const candleSeries = chart.addCandlestickSeries({
+        upColor: '#00e396',
+        downColor: '#ff4560',
+        borderVisible: false,
+        wickUpColor: '#00e396',
+        wickDownColor: '#ff4560'
+    });
+
+    // Map your data to the required format
+    const candleData = data.map(point => ({
+        time: point.timeStamp.length > 10
+        ? point.timeStamp.slice(0, 10) // 'YYYY-MM-DD'
+        : point.timeStamp,
+        open: point.open,
+        high: point.high,
+        low: point.low,
+        close: point.close,
+    }));
+
+    candleSeries.setData(candleData);
+
+    // Info bar logic
+    const ohlcBar = document.getElementById('ohlc-info-bar');
+    function showOhlcInfo(bar) {
+        if (!bar) {
+            ohlcBar.style.display = 'none';
+            return;
+        }
+        ohlcBar.style.display = 'flex';
+        ohlcBar.innerHTML = `
+            <span class="ohlc-label">O</span> ${bar.open}
+            <span class="ohlc-label">H</span> ${bar.high}
+            <span class="ohlc-label">L</span> ${bar.low}
+            <span class="ohlc-label">C</span> ${bar.close}
+            <span class="ohlc-label">Date</span> ${bar.time}
+        `;
+    }
+
+    // Show last candle on load
+    showOhlcInfo(candleData[candleData.length - 1]);
+
+    // Update info bar on crosshair move
+    chart.subscribeCrosshairMove(param => {
+        // Check if mouse is over a valid bar
+        const bar = param && param.seriesData && param.seriesData.get(candleSeries);
+        if (bar && param.time) {
+            showOhlcInfo({
+                open: bar.open,
+                high: bar.high,
+                low: bar.low,
+                close: bar.close,
+                time: typeof param.time === 'string'
+                ? param.time
+                : new Date(param.time * 1000).toISOString().slice(0, 10)
+            });
+        } else {
+            // Show last candle if not over a bar
+            showOhlcInfo(candleData[candleData.length - 1]);
+        }
+    });
+
+    // Responsive resize
+    window.addEventListener('resize', () => {
+        chart.applyOptions({ width: document.getElementById('candlestickChart').offsetWidth });
+    });
+
+    // Show chart container
+    document.getElementById('candlestickChartContainer').style.display = 'block';
+}
