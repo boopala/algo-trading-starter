@@ -1,8 +1,12 @@
 let currentPage = 0;
-let pageSize = 50;
+let pageSize = 25;
 let currentSegment = '';
 let currentExchange = '';
 let currentSearch = '';
+var validData = [];
+var candleSeries;
+var volumeSeries;
+let crosshairSubscribed = false;
 
 function fetchEquities(segment, exchange, search, page, size) {
     currentSegment = segment;
@@ -80,8 +84,13 @@ function submitEquity() {
     })
         .then(data => {
         console.log('Historical data received:', data);
-        // Render candlestick chart with received data
-        renderCandlestickChart(data);
+        const invalidData = data.filter(d =>
+        d.open === null || d.high === null || d.low === null ||
+        d.close === null || d.timeStamp === null
+        );
+        console.log("Invalid data points:", invalidData);
+        // Render candlestick mainChart with received data
+        renderCandlestickChart(data, interval);
     })
         .catch(error => {
         console.error('Error fetching historical data:', error);
@@ -109,58 +118,68 @@ function loadBackTestPanel() {
     });
 }
 
-function renderCandlestickChart(data) {
-    // Clear previous chart if any
-    document.getElementById('candlestickChart').innerHTML = '';
+// Helper: get time value in correct format for Lightweight Charts
+function getTimeValue(point, interval) {
+    if (interval === 'day') {
+        return point.timeStamp.slice(0, 10); // "YYYY-MM-DD"
+    } else {
+        return Math.floor(new Date(fixTimeZone(point.timeStamp)).getTime() / 1000); // UNIX seconds
+    }
+}
 
-    // Create the chart
-    const chart = LightweightCharts.createChart(document.getElementById('candlestickChart'), {
-        width: document.getElementById('candlestickChart').offsetWidth,
-        height: 450,
-        layout: {
-            background: { color: '#fff' },
-            textColor: '#222',
-        },
-        grid: {
-            vertLines: { color: '#eee' },
-            horzLines: { color: '#eee' },
-        },
-        crosshair: {
-            mode: LightweightCharts.CrosshairMode.Normal,
-        },
-        timeScale: {
-            timeVisible: true,
-            secondsVisible: false,
-            borderColor: '#ccc'
-        },
-        rightPriceScale: {
-            borderColor: '#ccc'
+function fixTimeZone(ts) {
+    // Converts "2022-01-03T09:15:00+0530" to "2022-01-03T09:15:00+05:30"
+    return ts.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
+}
+
+function renderCandlestickChart(data, interval) {
+    const uniqueData = [];
+    clearChartOnNewInterval();
+
+    if (!mainChart) {
+        createMainChart(data, interval);
+    } else {
+        // Clean and prepare data
+        validData = data
+            .filter(d =>
+        d.open !== null && d.open !== undefined &&
+        d.high !== null && d.high !== undefined &&
+        d.low !== null && d.low !== undefined &&
+        d.close !== null && d.close !== undefined &&
+        d.volume !== null && d.volume !== undefined &&
+        d.timeStamp
+        )
+            .map(d => ({
+            time: getTimeValue(d, interval),
+            open: Number(d.open),
+            high: Number(d.high),
+            low: Number(d.low),
+            close: Number(d.close),
+            volume: Number(d.volume)
+        }))
+            .sort((a, b) => {
+            if (typeof a.time === 'string' && typeof b.time === 'string') {
+                return a.time.localeCompare(b.time);
+            }
+            return a.time - b.time;
+        });
+        // Remove duplicates
+        let lastTime = null;
+        for (const d of validData) {
+            if (d.time !== lastTime) {
+                uniqueData.push(d);
+                lastTime = d.time;
+            }
         }
-    });
+        if (!candleSeries) {
+            candleSeries = mainChart.addCandlestickSeries({
+                priceScaleId: 'right'
+            });
+        }
+        validData = uniqueData;
+        candleSeries.setData(uniqueData);
+    }
 
-    // Prepare candlestick data
-    const candleSeries = chart.addCandlestickSeries({
-        upColor: '#00e396',
-        downColor: '#ff4560',
-        borderVisible: false,
-        wickUpColor: '#00e396',
-        wickDownColor: '#ff4560'
-    });
-
-    // Map your data to the required format
-    const candleData = data.map(point => ({
-        time: point.timeStamp.length > 10
-        ? point.timeStamp.slice(0, 10) // 'YYYY-MM-DD'
-        : point.timeStamp,
-        open: point.open,
-        high: point.high,
-        low: point.low,
-        close: point.close,
-    }));
-
-    candleSeries.setData(candleData);
-
-    // Info bar logic
     const ohlcBar = document.getElementById('ohlc-info-bar');
     function showOhlcInfo(bar) {
         if (!bar) {
@@ -168,43 +187,74 @@ function renderCandlestickChart(data) {
             return;
         }
         ohlcBar.style.display = 'flex';
+        const dateStr = (interval === 'day')
+        ? bar.time // 'YYYY-MM-DD'
+        : new Date(bar.time * 1000).toLocaleString('en-IN', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+
         ohlcBar.innerHTML = `
             <span class="ohlc-label">O</span> ${bar.open}
             <span class="ohlc-label">H</span> ${bar.high}
             <span class="ohlc-label">L</span> ${bar.low}
             <span class="ohlc-label">C</span> ${bar.close}
-            <span class="ohlc-label">Date</span> ${bar.time}
+            <span class="ohlc-label">Vol</span> ${bar.volume}
+            <span class="ohlc-label">Date</span> ${dateStr}
         `;
     }
 
-    // Show last candle on load
-    showOhlcInfo(candleData[candleData.length - 1]);
+    // Show last candle's info by default
+    showOhlcInfo(validData[validData.length - 1]);
 
-    // Update info bar on crosshair move
-    chart.subscribeCrosshairMove(param => {
-        // Check if mouse is over a valid bar
-        const bar = param && param.seriesData && param.seriesData.get(candleSeries);
-        if (bar && param.time) {
-            showOhlcInfo({
-                open: bar.open,
-                high: bar.high,
-                low: bar.low,
-                close: bar.close,
-                time: typeof param.time === 'string'
-                ? param.time
-                : new Date(param.time * 1000).toISOString().slice(0, 10)
-            });
-        } else {
-            // Show last candle if not over a bar
-            showOhlcInfo(candleData[candleData.length - 1]);
-        }
-    });
+    // Subscribe to crosshair move only once
+    /*if (!crosshairSubscribed) {
+        mainChart.subscribeCrosshairMove(param => {
+            if (!param || !param.time) {
+                showOhlcInfo(validData[validData.length - 1]);
+                return;
+            }
+            const bar = param.seriesData.get(candleSeries);
+            if (bar) {
+                const dataBar = validData.find(d => d.time === param.time);
+                showOhlcInfo({
+                    open: bar.open,
+                    high: bar.high,
+                    low: bar.low,
+                    close: bar.close,
+                    volume: dataBar ? dataBar.volume : '',
+                    time: param.time
+                });
+            } else {
+                showOhlcInfo(validData[validData.length - 1]);
+            }
+        });
+        crosshairSubscribed = true;
+    }*/
 
-    // Responsive resize
-    window.addEventListener('resize', () => {
-        chart.applyOptions({ width: document.getElementById('candlestickChart').offsetWidth });
-    });
+    document.getElementById('candlestickChartContainer').style.display = 'flex';
+    document.getElementById('candlestickChartContainer').style.flexDirection = 'column';
+}
 
-    // Show chart container
-    document.getElementById('candlestickChartContainer').style.display = 'block';
+function clearChartOnNewInterval() {
+    // Remove all indicator series
+    if (typeof indicatorSeriesMap !== "undefined") {
+        Object.keys(indicatorSeriesMap).forEach(key => {
+            if (indicatorSeriesMap[key] && indicatorSeriesMap[key].series) {
+                console.log('Removing series for key:', key);
+                mainChart.removeSeries(indicatorSeriesMap[key].series);
+            } else {
+                console.warn('No series to remove for key:', key, indicatorSeriesMap[key]);
+            }
+            delete indicatorSeriesMap[key];
+        });
+    }
+
+    // Remove volume series if present
+    if (typeof volumeSeries !== "undefined" && volumeSeries) {
+        mainChart.removeSeries(volumeSeries);
+        volumeSeries = null;
+        delete indicatorSeriesMap['Volume'];
+    }
+    renderIndicatorList();
 }

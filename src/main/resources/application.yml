@@ -38,4 +38,3 @@ live:
   holdings:
     websocket:
       enabled: false
-
