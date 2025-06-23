@@ -4,9 +4,46 @@ let currentSegment = '';
 let currentExchange = '';
 let currentSearch = '';
 var validData = [];
-var candleSeries;
 var volumeSeries;
-let crosshairSubscribed = false;
+let mainChart, mainCandleSeries;
+let crosshairHandler;
+
+function showOhlcInfo(bar, interval) {
+    const ohlcBar = document.getElementById('ohlc-info-bar');
+    if (!ohlcBar) return;
+
+    if (!bar) {
+        ohlcBar.style.display = 'none';
+        return;
+    }
+
+    ohlcBar.style.display = 'flex';
+
+    let dateStr = '';
+
+    if (interval === 'day' && typeof bar.time === 'object') {
+        // BusinessDay format (Lightweight Charts expects this)
+        dateStr = `${String(bar.time.day).padStart(2, '0')}-${String(bar.time.month).padStart(2, '0')}-${bar.time.year}`;
+    } else {
+        // UNIX timestamp format
+        const date = new Date(bar.time * 1000);
+        dateStr = date.toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: interval === 'day' ? undefined : '2-digit',
+            minute: interval === 'day' ? undefined : '2-digit'
+        });
+    }
+
+    ohlcBar.innerHTML = `
+        <span class="ohlc-label">O</span> ${bar.open}
+        <span class="ohlc-label">H</span> ${bar.high}
+        <span class="ohlc-label">L</span> ${bar.low}
+        <span class="ohlc-label">C</span> ${bar.close}
+        <span class="ohlc-label">Vol</span> ${bar.volume || '-'}
+        <span class="ohlc-label">Date</span> ${dateStr}
+    `;
+}
 
 function fetchEquities(segment, exchange, search, page, size) {
     currentSegment = segment;
@@ -119,118 +156,102 @@ function loadBackTestPanel() {
 }
 
 // Helper: get time value in correct format for Lightweight Charts
-function getTimeValue(point, interval) {
+function getTimeValue(d, interval) {
+    const date = new Date(d.timeStamp);
     if (interval === 'day') {
-        return point.timeStamp.slice(0, 10); // "YYYY-MM-DD"
+        return {
+            year: date.getFullYear(),
+            month: date.getMonth() + 1,
+            day: date.getDate()
+        };
     } else {
-        return Math.floor(new Date(fixTimeZone(point.timeStamp)).getTime() / 1000); // UNIX seconds
+        return Math.floor(date.getTime() / 1000);
     }
 }
 
-function fixTimeZone(ts) {
-    // Converts "2022-01-03T09:15:00+0530" to "2022-01-03T09:15:00+05:30"
-    return ts.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
-}
 
 function renderCandlestickChart(data, interval) {
     const uniqueData = [];
     clearChartOnNewInterval();
+    mainChart = LightweightCharts.createChart(document.getElementById('candlestickChart'), {
+        autoSize: true,
+        layout: { background: { color: '#fff' }, textColor: '#000' },
+        grid: { vertLines: { color: '#eee' }, horzLines: { color: '#eee' } },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        rightPriceScale: { borderColor: '#ccc' },
+        timeScale: {
+            borderColor: '#ccc',
+            timeVisible: interval !== 'day', // timeVisible false = only date shown
+            secondsVisible: false
+        },
+        localization: {
+            timeFormatter: (time) => {
+                if (typeof time === 'object' && time.year) {
+                    // BusinessDay format
+                    return `${String(time.day).padStart(2, '0')}-${String(time.month).padStart(2, '0')}-${time.year}`;
+                } else {
+                    // UNIX timestamp (seconds)
+                    const date = new Date(time * 1000);
+                    return date.toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata',
+                        day: '2-digit', month: 'short', year: 'numeric',
+                        hour: interval === 'day' ? undefined : '2-digit',
+                        minute: interval === 'day' ? undefined : '2-digit'
+                    });
+                }
+            }
+        }
+    });
 
-    if (!mainChart) {
-        createMainChart(data, interval);
-    } else {
-        // Clean and prepare data
-        validData = data
-            .filter(d =>
-        d.open !== null && d.open !== undefined &&
-        d.high !== null && d.high !== undefined &&
-        d.low !== null && d.low !== undefined &&
-        d.close !== null && d.close !== undefined &&
-        d.volume !== null && d.volume !== undefined &&
-        d.timeStamp
-        )
-            .map(d => ({
-            time: getTimeValue(d, interval),
-            open: Number(d.open),
-            high: Number(d.high),
-            low: Number(d.low),
-            close: Number(d.close),
-            volume: Number(d.volume)
-        }))
-            .sort((a, b) => {
-            if (typeof a.time === 'string' && typeof b.time === 'string') {
-                return a.time.localeCompare(b.time);
-            }
-            return a.time - b.time;
-        });
-        // Remove duplicates
-        let lastTime = null;
-        for (const d of validData) {
-            if (d.time !== lastTime) {
-                uniqueData.push(d);
-                lastTime = d.time;
-            }
+    // Clean and deduplicate data
+    const cleanedData = cleanCandlestickData(data, interval);
+    let lastTime = null;
+    for (const d of cleanedData) {
+        if (d.time !== lastTime) {
+            uniqueData.push(d);
+            lastTime = d.time;
         }
-        if (!candleSeries) {
-            candleSeries = mainChart.addCandlestickSeries({
-                priceScaleId: 'right'
-            });
-        }
-        validData = uniqueData;
-        candleSeries.setData(uniqueData);
     }
+    mainCandleSeries = mainChart.addCandlestickSeries();
 
-    const ohlcBar = document.getElementById('ohlc-info-bar');
-    function showOhlcInfo(bar) {
-        if (!bar) {
-            ohlcBar.style.display = 'none';
+    // Set data
+    validData = uniqueData;
+    mainCandleSeries.setData(uniqueData);
+
+    // Logging (fix .size to .length)
+    console.log('Setting candlestick data size:', uniqueData.length);
+    console.log('Setting candlestick data:', uniqueData);
+    console.log('First 5 data points:', uniqueData.slice(0, 5));
+    console.log('Last 5 data points:', uniqueData.slice(-5));
+    console.log('Data is sorted:', uniqueData.every((d, i, arr) => i === 0 || d.time >= arr[i-1].time));
+    console.log('Duplicates:', uniqueData.some((d, i, arr) => i > 0 && d.time === arr[i-1].time));
+    console.log('Chart container size:', document.getElementById('candlestickChart').offsetWidth, document.getElementById('candlestickChart').offsetHeight);
+
+    // Show last candle info by default
+    showOhlcInfo(validData[validData.length - 1], interval);
+
+    // Subscribe to crosshair move only once, after chart and series are created
+    crosshairHandler = (param) => {
+        if (!param || !param.time) {
+            showOhlcInfo(validData[validData.length - 1], interval);
             return;
         }
-        ohlcBar.style.display = 'flex';
-        const dateStr = (interval === 'day')
-        ? bar.time // 'YYYY-MM-DD'
-        : new Date(bar.time * 1000).toLocaleString('en-IN', {
-            day: '2-digit', month: 'short', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
-
-        ohlcBar.innerHTML = `
-            <span class="ohlc-label">O</span> ${bar.open}
-            <span class="ohlc-label">H</span> ${bar.high}
-            <span class="ohlc-label">L</span> ${bar.low}
-            <span class="ohlc-label">C</span> ${bar.close}
-            <span class="ohlc-label">Vol</span> ${bar.volume}
-            <span class="ohlc-label">Date</span> ${dateStr}
-        `;
-    }
-
-    // Show last candle's info by default
-    showOhlcInfo(validData[validData.length - 1]);
-
-    // Subscribe to crosshair move only once
-    /*if (!crosshairSubscribed) {
-        mainChart.subscribeCrosshairMove(param => {
-            if (!param || !param.time) {
-                showOhlcInfo(validData[validData.length - 1]);
-                return;
-            }
-            const bar = param.seriesData.get(candleSeries);
-            if (bar) {
-                const dataBar = validData.find(d => d.time === param.time);
-                showOhlcInfo({
-                    open: bar.open,
-                    high: bar.high,
-                    low: bar.low,
-                    close: bar.close,
-                    volume: dataBar ? dataBar.volume : '',
-                    time: param.time
-                });
-            } else {
-                showOhlcInfo(validData[validData.length - 1]);
-            }
-        });
-        crosshairSubscribed = true;
-    }*/
+        const bar = param.seriesData.get(mainCandleSeries);
+        if (bar) {
+            const dataBar = validData.find(d => d.time === param.time);
+            showOhlcInfo({
+                open: bar.open,
+                high: bar.high,
+                low: bar.low,
+                close: bar.close,
+                volume: dataBar ? dataBar.volume : '',
+                time: param.time
+            }, interval);
+        } else {
+            showOhlcInfo(validData[validData.length - 1], interval);
+        }
+    };
+    mainChart.subscribeCrosshairMove(crosshairHandler);
 
     document.getElementById('candlestickChartContainer').style.display = 'flex';
     document.getElementById('candlestickChartContainer').style.flexDirection = 'column';
@@ -238,23 +259,9 @@ function renderCandlestickChart(data, interval) {
 
 function clearChartOnNewInterval() {
     // Remove all indicator series
-    if (typeof indicatorSeriesMap !== "undefined") {
-        Object.keys(indicatorSeriesMap).forEach(key => {
-            if (indicatorSeriesMap[key] && indicatorSeriesMap[key].series) {
-                console.log('Removing series for key:', key);
-                mainChart.removeSeries(indicatorSeriesMap[key].series);
-            } else {
-                console.warn('No series to remove for key:', key, indicatorSeriesMap[key]);
-            }
-            delete indicatorSeriesMap[key];
-        });
+    clearAllIndicators();
+    if (mainChart) {
+        mainChart.remove();
+        mainChart = null; // Allow clean re-creation
     }
-
-    // Remove volume series if present
-    if (typeof volumeSeries !== "undefined" && volumeSeries) {
-        mainChart.removeSeries(volumeSeries);
-        volumeSeries = null;
-        delete indicatorSeriesMap['Volume'];
-    }
-    renderIndicatorList();
 }
