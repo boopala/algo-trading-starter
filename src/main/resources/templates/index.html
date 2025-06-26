@@ -4,12 +4,12 @@
     <title>Dashboard</title>
     <link rel="stylesheet" th:href="@{/css/styles.css?v=1.2}">
     <link rel="stylesheet" th:href="@{/css/equities.css?v=1.2}">
-    <link rel="stylesheet" th:href="@{/css/backtest.css?v=1.40}">
+    <link rel="stylesheet" th:href="@{/css/backtest.css?v=1.42}">
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
-    <script th:src="@{/js/indicator.js?v=1.65}"></script>
-    <script th:src="@{/js/backtest.js?v=2.13}"></script>
+    <script th:src="@{/js/indicator.js?v=1.71}"></script>
+    <script th:src="@{/js/backtest.js?v=2.18}"></script>
     <script th:src="@{/js/dashboard.js?v=1.9}"></script>
 </head>
 <body>
@@ -171,6 +171,7 @@
                         <option value="SMA">SMA</option>
                         <option value="EMA">EMA</option>
                         <option value="Volume">Volume</option>
+                        <option value="RSI">RSI</option>
                     </select>
                     <input id="periodInput" type="number" min="2" max="100" value="20" style="width:50px;" placeholder="Period">
                     <input id="colorInput" type="color" value="#1976d2">
@@ -182,11 +183,15 @@
                     <button id="addIndicatorBtn">Add</button>
                     <button id="clearIndicatorsBtn">Clear All</button>
                 </div>
+                <label style="margin-left: 10px;">
+                    <input type="checkbox" id="toggleSR" checked> Show Support/Resistance
+                </label>
             </div>
             <div id="candlestickChart">
                 <div id="ohlc-info-bar"></div>
                 <div id="indicatorList" class="indicator-list"></div>
             </div>
+            <div id="rsiChart"></div>
         </div>
     </div>
 </div>

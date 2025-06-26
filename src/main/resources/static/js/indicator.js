@@ -1,29 +1,7 @@
 window.indicatorSeriesMap = window.indicatorSeriesMap || {};
-
-function cleanCandlestickData(data, interval) {
-    return data
-        .filter(d =>
-    d.open !== null && d.open !== undefined &&
-    d.high !== null && d.high !== undefined &&
-    d.low !== null && d.low !== undefined &&
-    d.close !== null && d.close !== undefined &&
-    d.volume !== null && d.volume !== undefined &&
-    d.timeStamp !== null && d.timeStamp !== undefined
-    )
-        .map(d => ({
-        open: Number(d.open),
-        high: Number(d.high),
-        low: Number(d.low),
-        close: Number(d.close),
-        volume: Number(d.volume),
-        time: getTimeValue(d, interval)
-    })).sort((a, b) => {
-        if (typeof a.time === 'string' && typeof b.time === 'string') {
-            return a.time.localeCompare(b.time);
-        }
-        return a.time - b.time;
-    });
-}
+let rsiToMainHandler = null;
+let mainToRsiHandler = null;
+var rsiChart = null;
 
 function getIndicatorListElement() {
     return document.getElementById('indicatorList');
@@ -62,7 +40,7 @@ async function applyCustomIndicator() {
                 priceFormat: { type: 'volume' },
                 overlay: false,
                 scaleMargins: { top: 0.85, bottom: 0 },
-                lineWidth: 1,
+                lineWidth: 1
             });
             // Prepare volume data with color
             const volumeData = validData.map(bar => {
@@ -75,13 +53,13 @@ async function applyCustomIndicator() {
             volumeSeries.setData(volumeData);
         }
         // Add to indicator map for consistent handling
-        indicatorSeriesMap[key] = { series: volumeSeries, meta: { color: '#888', width: 1 } };
+        indicatorSeriesMap[key] = { series: volumeSeries, chart: mainChart, meta: { color: '#888', width: 1 } };
         renderIndicatorList();
         return;
     }
 
-    if (!indicator || !(indicator === 'SMA' || indicator === 'EMA' || indicator === 'Volume')) {
-        alert("Select SMA, EMA, or Volume.");
+    if (!indicator || !['SMA', 'EMA', 'Volume', 'RSI'].includes(indicator)) {
+        alert("Select SMA, EMA, Volume, or RSI.");
         return;
     }
 
@@ -90,21 +68,63 @@ async function applyCustomIndicator() {
     const key = `${indicator}_${period}`;
 
     if (result.values && result.values.length) {
-        // Remove existing indicator if present
         if (indicatorSeriesMap[key]) {
-            mainChart.removeSeries(indicatorSeriesMap[key].series);
+            const info = indicatorSeriesMap[key];
+            if (info.series) {
+                if (Array.isArray(info.series)) {
+                    info.series.forEach(s => mainChart.removeSeries(s));
+                } else {
+                    mainChart.removeSeries(info.series);
+                }
+            }
             delete indicatorSeriesMap[key];
         }
-        // Prepare data for the indicator line
+
         const data = result.values.map((val, idx) => ({
             time: validData[idx].time,
             value: val
         }));
-        // Add new line series
-        const series = mainChart.addLineSeries({ color, lineWidth: width });
-        series.setData(data);
-        // Store series and its metadata
-        indicatorSeriesMap[key] = { series, meta: { color, width } };
+        if (indicator === 'RSI') {
+            const mainChartContainer = document.getElementById('candlestickChart');
+            const rsiChartContainer = document.getElementById('rsiChart');
+            if (!rsiChartContainer) {
+                alert('RSI container not found!');
+                return;
+            }
+            const chartWidth = mainChartContainer.clientWidth;
+            if (rsiChart) {
+                rsiChart.remove(); // remove old RSI chart if exists
+                rsiChart = null;
+            }
+            rsiChart = LightweightCharts.createChart(rsiChartContainer, {
+                width: chartWidth, height: 100,
+                layout: { background: { color: '#fff' }, textColor: '#000' },
+                grid: { vertLines: { color: '#eee' }, horzLines: { color: '#eee' } },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                rightPriceScale: {
+                    visible: true,
+                    scaleMargins: { top: 0.15, bottom: 0.15 }
+                },
+                timeScale: {
+                    visible: true,
+                    timeVisible: true,
+                    secondsVisible: false
+                }
+            });
+            subscribeRSISync();
+            const rsiSeries = rsiChart.addLineSeries({
+                color,
+                lineWidth: width
+            });
+            rsiSeries.setData(data);
+            indicatorSeriesMap[key] = { series: rsiSeries, chart: rsiChart, meta: { color, width } };
+        } else {
+            // Add new line series
+            const series = mainChart.addLineSeries({ color, lineWidth: width });
+            series.setData(data);
+            // Store series and its metadata
+            indicatorSeriesMap[key] = { series, chart: mainChart, meta: { color, width } };
+        }
         // Render the updated indicator list
         renderIndicatorList();
     }
@@ -112,17 +132,34 @@ async function applyCustomIndicator() {
 
 // Remove a single indicator
 function removeSpecificIndicator(key) {
-    if (key === 'Volume' && volumeSeries) {
-        mainChart.removeSeries(volumeSeries);
-        volumeSeries = null;
-        delete indicatorSeriesMap[key];
-        renderIndicatorList();
+    const info = indicatorSeriesMap[key];
+
+    if (!info || !info.series) {
+        console.warn(`Indicator ${key} not found or already removed.`);
         return;
     }
-    if (indicatorSeriesMap[key]) {
-        mainChart.removeSeries(indicatorSeriesMap[key].series);
-        delete indicatorSeriesMap[key];
-        renderIndicatorList();
+
+    const chart = info.chart || mainChart;
+
+    if (Array.isArray(info.series)) {
+        info.series.forEach(series => {
+            if (series) chart.removeSeries(series);
+        });
+    } else {
+        if (info.series) chart.removeSeries(info.series);
+    }
+
+    // Cleanup
+    delete indicatorSeriesMap[key];
+    renderIndicatorList();
+
+    // If it's RSI, clear container
+    if (key.startsWith('RSI')) {
+        const rsiChartContainer = document.getElementById('rsiChart');
+        if (rsiChartContainer) rsiChartContainer.innerHTML = '';
+        if (typeof rsiChart !== 'undefined') {
+            rsiChart = null;
+        }
     }
 }
 
@@ -133,12 +170,32 @@ function clearAllIndicators() {
         volumeSeries = null;
         delete indicatorSeriesMap['Volume'];
     }
+
     Object.keys(indicatorSeriesMap).forEach(key => {
-        mainChart.removeSeries(indicatorSeriesMap[key].series);
+        const info = indicatorSeriesMap[key];
+        if (info.series) {
+            if (Array.isArray(info.series)) {
+                info.series.forEach(s => {
+                    const chart = info.chart || mainChart;
+                    chart.removeSeries(s);
+                });
+            } else {
+                const chart = info.chart || mainChart;
+                chart.removeSeries(info.series);
+            }
+        }
         delete indicatorSeriesMap[key];
     });
+
+    // RSI Chart cleanup (if RSI is created separately)
+    if (rsiChart) {
+        unsubscribeRSISync && unsubscribeRSISync(); // optional if sync exists
+        rsiChart.remove();
+        rsiChart = null;
+    }
     renderIndicatorList();
 }
+
 
 function initializeChartControls() {
     const NAV_BARS = 20;
@@ -146,44 +203,84 @@ function initializeChartControls() {
     const chartRightBtn = document.getElementById('chartRightBtn');
     const chartFullscreenBtn = document.getElementById('chartFullscreenBtn');
     const chartContainer = document.getElementById('candlestickChartContainer');
-    let isFullscreen = false;
 
     chartLeftBtn.onclick = function() {
-        mainChart.timeScale().scrollToPosition(mainChart.timeScale().scrollPosition() - NAV_BARS, false);
+        if (mainChart) {
+            mainChart.timeScale().scrollToPosition(
+                mainChart.timeScale().scrollPosition() - NAV_BARS,
+                false
+            );
+        }
     };
+
     chartRightBtn.onclick = function() {
-        mainChart.timeScale().scrollToPosition(mainChart.timeScale().scrollPosition() + NAV_BARS, false);
+        if (mainChart) {
+            mainChart.timeScale().scrollToPosition(
+                mainChart.timeScale().scrollPosition() + NAV_BARS,
+                false
+            );
+        }
     };
+
     chartFullscreenBtn.onclick = function() {
         if (!document.fullscreenElement) {
-            chartContainer.requestFullscreen();
+            chartContainer.requestFullscreen().catch(err => console.error("Fullscreen error:", err));
         } else {
             document.exitFullscreen();
         }
     };
-    document.addEventListener('fullscreenchange', () => {
+
+    // Centralized chart resizing function
+    function resizeCharts() {
         const chartDiv = document.getElementById('candlestickChart');
-        if (document.fullscreenElement === chartContainer) {
-            // Resize chart to fill fullscreen
-            chartDiv.style.width = '100vw';
-            chartDiv.style.height = '100vh';
-            // Call your chart library's resize method if needed
-            // mainChart.resize(window.innerWidth, window.innerHeight);
+        const rsiDiv = document.getElementById('rsiChart');
+        const isFullScreen = document.fullscreenElement === chartContainer;
+        const width = chartContainer.clientWidth;
+
+        if (isFullScreen) {
+            const screenHeight = window.innerHeight;
+            const width = chartContainer.clientWidth;
+
+            const rsiDiv = document.getElementById('rsiChart');
+            const hasRSI = rsiDiv && rsiDiv.childElementCount > 0;
+
+            if (hasRSI) {
+                const mainHeight = Math.floor(screenHeight * 0.75);
+                const rsiHeight = screenHeight - mainHeight;
+
+                chartDiv.style.height = `${mainHeight}px`;
+                rsiDiv.style.height = `${rsiHeight}px`;
+
+                if (mainChart) mainChart.resize(width, mainHeight);
+                if (rsiChart) rsiChart.resize(width, rsiHeight);
+            } else {
+                chartDiv.style.height = `${screenHeight}px`;
+                if (mainChart) mainChart.resize(width, screenHeight);
+                if (rsiChart) rsiChart.resize(width, 0); // collapse RSI
+            }
         } else {
-            // Restore original size
             chartDiv.style.width = '100%';
             chartDiv.style.height = '400px';
-            // mainChart.resize(originalWidth, originalHeight);
-        }
-    });
+            if (mainChart) mainChart.resize(width, 400);
 
-    document.addEventListener('fullscreenchange', () => {
-        if (document.fullscreenElement === chartContainer) {
-            mainChart.resize(window.innerWidth, window.innerHeight);
-        } else {
-            mainChart.resize(900, 400);
+            if (rsiDiv) {
+                rsiDiv.style.width = '100%';
+                rsiDiv.style.height = '100px';
+                rsiDiv.style.minHeight = '100px';
+                rsiDiv.style.display = 'block';
+                if (rsiChart) rsiChart.resize(width, 100);
+            }
         }
-    });
+    }
+
+    let resizeTimeout;
+    function debounceResizeCharts() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(resizeCharts, 100);
+    }
+
+    document.addEventListener('fullscreenchange', debounceResizeCharts);
+    window.addEventListener('resize', debounceResizeCharts);
 }
 
 window.onload = function() {
@@ -206,4 +303,46 @@ async function invokeCustomIndicator(indicator, period, validData) {
     });
     return response;
 }
+
+function subscribeRSISync() {
+    rsiToMainHandler = () => {
+        if (mainChart && rsiChart) {
+            const mainRange = rsiChart.timeScale().getVisibleRange();
+            if (mainRange) mainChart.timeScale().setVisibleRange(mainRange);
+        }
+    };
+    mainToRsiHandler = () => {
+        if (mainChart && rsiChart) {
+            const rsiRange = mainChart.timeScale().getVisibleRange();
+            if (rsiRange) rsiChart.timeScale().setVisibleRange(rsiRange);
+        }
+    };
+
+    rsiChart.timeScale().subscribeVisibleTimeRangeChange(rsiToMainHandler);
+    mainChart.timeScale().subscribeVisibleTimeRangeChange(mainToRsiHandler);
+}
+
+function unsubscribeRSISync() {
+    if (rsiChart && rsiToMainHandler) {
+        rsiChart.timeScale().unsubscribeVisibleTimeRangeChange(rsiToMainHandler);
+    }
+    if (mainChart && mainToRsiHandler) {
+        mainChart.timeScale().unsubscribeVisibleTimeRangeChange(mainToRsiHandler);
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    const toggleSR = document.getElementById('toggleSR');
+    if (toggleSR) {
+        toggleSR.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                plotSupportResistanceMarkers(currentChartData); // your function
+            } else {
+                mainCandleSeries.setMarkers([]); // Clear markers
+            }
+        });
+    } else {
+        console.warn("toggleSR checkbox not found in the DOM.");
+    }
+});
 

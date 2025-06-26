@@ -1,6 +1,7 @@
 package com.example.algotrading.service;
 
 import com.example.algotrading.data.repository.EquityRepository;
+import com.example.algotrading.util.HistoricalDataMapper;
 import com.zerodhatech.kiteconnect.KiteConnect;
 import com.zerodhatech.kiteconnect.kitehttp.exceptions.KiteException;
 import com.zerodhatech.models.HistoricalData;
@@ -43,33 +44,8 @@ public class BacktestService {
     @Autowired
     private EncryptionService encryptionService;
 
-    /*public List<HistoricalData> getHistoricalData(String equityId, String fromDateStr, String toDateStr, String interval) throws KiteException, IOException, IOException, KiteException {
-        String methodName = "getHistoricalData ";
-        log.info(methodName + "entry");
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        Date fromDate;
-        Date toDate;
-        try {
-            fromDate = formatter.parse(fromDateStr + " 09:15:00");
-            toDate = formatter.parse(toDateStr + " 15:30:00");
-        } catch (ParseException e) {
-            log.error(methodName + "Exception occurred ", e);
-            throw new RuntimeException("Invalid date format", e);
-        }
-        KiteConnect kiteConnect = new KiteConnect(apiKey);
-        kiteConnect.setUserId(userId);
-        Optional<String> encryptedToken = userTokenService.getAccessTokenByUserId(userId);
-        if (encryptedToken.isEmpty()) {
-            log.info(methodName + "Access token unavailable for userId");
-            throw new RuntimeException("Access Token not found");
-        }
-        String accessToken = encryptionService.decrypt(encryptedToken.get());
-        kiteConnect.setAccessToken(accessToken);
-        String instrumentToken = equityRepository.findInstrumentTokenById(Long.valueOf(equityId));
-        HistoricalData historicalData = kiteConnect.getHistoricalData(fromDate, toDate, instrumentToken, interval, false, false);
-        log.info(methodName + "exit");
-        return historicalData.dataArrayList;
-    }*/
+    @Autowired
+    private SupportResistanceService supportResistanceService;
 
     private int getMaxDaysForInterval(String interval) {
         switch (interval) {
@@ -94,7 +70,28 @@ public class BacktestService {
         }
     }
 
-    public List<HistoricalData> getHistoricalData(String equityId, String fromDateStr, String toDateStr, String interval) throws Exception, KiteException {
+    private int getSwingWindowSize(String interval) {
+        String methodName = "getSwingWindowSize ";
+        log.info(methodName + "entry");
+        switch (interval) {
+            case "3minute":
+            case "5minute":
+                return 2; // Intraday scalping – fast response
+            case "10minute":
+            case "15minute":
+                return 3; // Short-term intraday
+            case "30minute":
+            case "60minute":
+            case "hour":
+                return 4; // Medium-term swing trades
+            case "day":
+                return 5; // Long-term position trades
+            default:
+                return 2; // Fallback for unknown intervals
+        }
+    }
+
+    public List<com.example.algotrading.model.response.HistoricalData> getHistoricalData(String equityId, String fromDateStr, String toDateStr, String interval) throws Exception, KiteException {
         String methodName = "getHistoricalData ";
         log.info(methodName + "entry");
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -105,7 +102,7 @@ public class BacktestService {
 
         int maxDays = getMaxDaysForInterval(interval);
 
-        List<HistoricalData> allData = new ArrayList<>();
+        List<com.example.algotrading.model.response.HistoricalData> allData = new ArrayList<>();
         KiteConnect kiteConnect = new KiteConnect(apiKey);
         kiteConnect.setUserId(userId);
         Optional<String> encryptedToken = userTokenService.getAccessTokenByUserId(userId);
@@ -124,13 +121,16 @@ public class BacktestService {
 
             HistoricalData chunkData = kiteConnect.getHistoricalData(chunkStart, chunkEnd, instrumentToken, interval, false, false);
             if (chunkData != null && chunkData.dataArrayList != null) {
-                allData.addAll(chunkData.dataArrayList);
+                allData.addAll(HistoricalDataMapper.mapFromKite(chunkData.dataArrayList));
             }
             chunkStart = new Date(chunkEnd.getTime() + 1000); // move 1 second ahead to avoid overlap
         }
 
         // Optionally, sort allData by date if needed
         allData.sort(Comparator.comparing(d -> d.timeStamp));
+        int windowSize = getSwingWindowSize(interval);
+        log.info(methodName + "windowSize: {}", windowSize);
+        supportResistanceService.markSwingHighLow(allData, windowSize);
         log.info(methodName + "exit");
         return allData;
     }

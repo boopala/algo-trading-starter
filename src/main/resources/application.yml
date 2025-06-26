@@ -37,4 +37,4 @@ logging:
 live:
   holdings:
     websocket:
-      enabled: true
+      enabled: false

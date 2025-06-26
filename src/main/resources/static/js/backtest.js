@@ -7,6 +7,7 @@ var validData = [];
 var volumeSeries;
 let mainChart, mainCandleSeries;
 let crosshairHandler;
+let currentChartData = [];
 
 function showOhlcInfo(bar, interval) {
     const ohlcBar = document.getElementById('ohlc-info-bar');
@@ -127,7 +128,9 @@ function submitEquity() {
         );
         console.log("Invalid data points:", invalidData);
         // Render candlestick mainChart with received data
+        currentChartData = data;
         renderCandlestickChart(data, interval);
+        plotSupportResistanceMarkers(data);
     })
         .catch(error => {
         console.error('Error fetching historical data:', error);
@@ -178,7 +181,11 @@ function renderCandlestickChart(data, interval) {
         layout: { background: { color: '#fff' }, textColor: '#000' },
         grid: { vertLines: { color: '#eee' }, horzLines: { color: '#eee' } },
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-        rightPriceScale: { borderColor: '#ccc' },
+        rightPriceScale: {
+            borderColor: '#ccc',
+            visible: true,    // Main candle price scale
+            scaleMargins: { top: 0.05, bottom: 0.3 } // leave space for volume below
+        },
         timeScale: {
             borderColor: '#ccc',
             timeVisible: interval !== 'day', // timeVisible false = only date shown
@@ -264,4 +271,60 @@ function clearChartOnNewInterval() {
         mainChart.remove();
         mainChart = null; // Allow clean re-creation
     }
+}
+
+function cleanCandlestickData(data, interval) {
+    return data
+        .filter(d =>
+    d.open !== null && d.open !== undefined &&
+    d.high !== null && d.high !== undefined &&
+    d.low !== null && d.low !== undefined &&
+    d.close !== null && d.close !== undefined &&
+    d.volume !== null && d.volume !== undefined &&
+    d.timeStamp !== null && d.timeStamp !== undefined
+    )
+        .map(d => ({
+        open: Number(d.open),
+        high: Number(d.high),
+        low: Number(d.low),
+        close: Number(d.close),
+        volume: Number(d.volume),
+        time: getTimeValue(d, interval)
+    })).sort((a, b) => {
+        if (typeof a.time === 'string' && typeof b.time === 'string') {
+            return a.time.localeCompare(b.time);
+        }
+        return a.time - b.time;
+    });
+}
+
+// Sample: Add support/resistance markers
+function plotSupportResistanceMarkers(dataWithLevels) {
+    const markers = [];
+
+    dataWithLevels.forEach(point => {
+        const time = new Date(point.timeStamp).getTime() / 1000; // convert ms to seconds
+
+        if (point.support) {
+            markers.push({
+                time: time,
+                position: 'belowBar',
+                color: '#26a69a', // Green for support
+                shape: 'arrowUp',
+                text: 'Support'
+            });
+        }
+
+        if (point.resistance) {
+            markers.push({
+                time: time,
+                position: 'aboveBar',
+                color: '#ef5350', // Red for resistance
+                shape: 'arrowDown',
+                text: 'Resistance'
+            });
+        }
+    });
+
+    mainCandleSeries.setMarkers(markers);
 }

@@ -198,4 +198,11 @@ button:disabled {
     opacity: 0.5;
 }
 
+#rsiChart {
+    width: 100% !important;
+    height: 100px !important; /* RSI chart height smaller */
+    margin-top: 10px;
+    min-height: 100px;
+    display: block;
+}
 

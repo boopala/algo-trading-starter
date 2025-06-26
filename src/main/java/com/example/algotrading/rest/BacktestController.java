@@ -1,8 +1,8 @@
 package com.example.algotrading.rest;
 
+import com.example.algotrading.model.response.HistoricalData;
 import com.example.algotrading.service.BacktestService;
 import com.zerodhatech.kiteconnect.kitehttp.exceptions.KiteException;
-import com.zerodhatech.models.HistoricalData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
