@@ -8,6 +8,7 @@ var volumeSeries;
 let mainChart, mainCandleSeries;
 let crosshairHandler;
 let currentChartData = [];
+let interval = '';
 
 function showOhlcInfo(bar, interval) {
     const ohlcBar = document.getElementById('ohlc-info-bar');
@@ -102,40 +103,53 @@ function submitEquity() {
         return;
     }
 
+    const strategy = document.getElementById('strategySelect').value;
+    const params = new URLSearchParams();
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
-    const interval = document.getElementById('intervalSelect').value;
+    interval = document.getElementById('intervalSelect').value;
 
-    const params = new URLSearchParams({
+    /*const params = new URLSearchParams({
         equityId: selectedId.value,
         fromDate: startDate,
         toDate: endDate,
         interval: interval
-    });
+    });*/
 
-    fetch(`/api/backtest/historical-data?${params.toString()}`)
-        .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        return response.json();
-    })
-        .then(data => {
-        console.log('Historical data received:', data);
-        const invalidData = data.filter(d =>
-        d.open === null || d.high === null || d.low === null ||
-        d.close === null || d.timeStamp === null
-        );
-        console.log("Invalid data points:", invalidData);
-        // Render candlestick mainChart with received data
-        currentChartData = data;
-        renderCandlestickChart(data, interval);
-        plotSupportResistanceMarkers(data);
-    })
-        .catch(error => {
-        console.error('Error fetching historical data:', error);
-        alert('Failed to fetch historical data.');
-    });
+    params.append("equityId", selectedId.value);
+    params.append("fromDate", startDate);
+    params.append("toDate", endDate);
+    params.append("interval", interval);
+
+    if (strategy === 'historical') {
+        fetch(`/api/backtest/historical-data?${params.toString()}`)
+            .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+            .then(data => {
+            console.log('Historical data received:', data);
+            const invalidData = data.filter(d =>
+            d.open === null || d.high === null || d.low === null ||
+            d.close === null || d.timeStamp === null
+            );
+            console.log("Invalid data points:", invalidData);
+            // Render candlestick mainChart with received data
+            currentChartData = data;
+            renderCandlestickChart(data, interval);
+            plotSupportResistanceMarkers(data);
+        })
+            .catch(error => {
+            console.error('Error fetching historical data:', error);
+            alert('Failed to fetch historical data.');
+        });
+    } else if (strategy === 'ema-rsi') {
+        lastStrategyParams = params;
+        document.getElementById('emaRsiModal').style.display = 'block';
+    }
+
 }
 
 function loadBackTestPanel() {
@@ -327,4 +341,198 @@ function plotSupportResistanceMarkers(dataWithLevels) {
     });
 
     mainCandleSeries.setMarkers(markers);
+}
+
+function formatToChartTime(dateString) {
+    const date = new Date(dateString);
+    return {
+        year: date.getUTCFullYear(),
+        month: date.getUTCMonth() + 1,
+        day: date.getUTCDate(),
+        hour: date.getUTCHours(),
+        minute: date.getUTCMinutes()
+    };
+}
+
+
+function plotBuySellMarkers(trades) {
+    const markers = [];
+
+    if (!Array.isArray(trades)) {
+        console.error("Invalid trades data passed to plotBuySellMarkers:", trades);
+        return;
+    }
+
+    trades.forEach(trade => {
+        if (trade.buyTime && typeof trade.buyPrice === 'number') {
+            markers.push({
+                time: formatToChartTime(trade.buyTime),
+                position: 'belowBar', // changed from 'below' to 'belowBar' for visibility
+                color: 'green',
+                shape: 'arrowUp',
+                text: `Buy\n₹${trade.buyPrice.toFixed(2)}`,
+                size: 1
+            });
+        }
+
+        if (trade.sellTime && typeof trade.sellPrice === 'number') {
+            let text = `Sell\n₹${trade.sellPrice.toFixed(2)}`;
+
+            if (typeof trade.profit === 'number' && typeof trade.profitPercent === 'number') {
+                const pnlColor = trade.profit >= 0 ? '🟢' : '🔴';
+                text += `\n${pnlColor} ₹${trade.profit.toFixed(2)} (${trade.profitPercent.toFixed(2)}%)`;
+            }
+
+            markers.push({
+                time: formatToChartTime(trade.sellTime),
+                position: 'aboveBar', // changed from 'above' to 'aboveBar'
+                color: 'red',
+                shape: 'arrowDown',
+                text: text,
+                size: 1
+            });
+        }
+    });
+
+    if (mainCandleSeries && typeof mainCandleSeries.setMarkers === 'function') {
+        mainCandleSeries.setMarkers(markers);
+    } else {
+        console.warn("mainCandleSeries is not ready. Cannot set markers.");
+    }
+}
+
+window.onload = function () {
+    initializeChartControls();
+
+    document.getElementById('addIndicatorBtn').onclick = applyCustomIndicator;
+    document.getElementById('clearIndicatorsBtn').onclick = clearAllIndicators;
+    const closeBtn = document.getElementById('closeEmaRsiModal');
+    const confirmBtn = document.getElementById('confirmEmaRsi');
+
+    if (closeBtn) {
+        closeBtn.onclick = () => {
+            document.getElementById('emaRsiModal').style.display = 'none';
+        };
+    }
+
+    if (confirmBtn) {
+        confirmBtn.onclick = () => {
+            const emaShort = document.getElementById('emaShort').value;
+            const emaLong = document.getElementById('emaLong').value;
+            const rsiPeriod = document.getElementById('rsiPeriod').value;
+            const entryRsiThreshold = document.getElementById('entryRsiThreshold').value;
+            const stopLossPercent = document.getElementById('stopLossPercent').value;
+            const takeProfitPercent = document.getElementById('takeProfitPercent').value;
+            const useTrailingStopLoss = document.getElementById('trailingStopLossCheckbox').checked;
+
+            document.getElementById('emaRsiModal').style.display = 'none';
+
+            fetch(`/api/backtest/ema-rsi`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    equityId: lastStrategyParams.get("equityId"),
+                    fromDate: lastStrategyParams.get("fromDate"),
+                    toDate: lastStrategyParams.get("toDate"),
+                    interval: lastStrategyParams.get("interval"),
+                    emaShortPeriod: parseInt(emaShort),
+                    emaLongPeriod: parseInt(emaLong),
+                    rsiPeriod: parseInt(rsiPeriod),
+                    entryRsiThreshold: parseInt(entryRsiThreshold),
+                    stopLossPercent: parseFloat(stopLossPercent),
+                    takeProfitPercent: parseFloat(takeProfitPercent),
+                    useTrailingStopLoss : useTrailingStopLoss
+                })
+            })
+                .then(response => {
+                if (!response.ok) throw new Error("Strategy response was not ok");
+                return response.json();
+            })
+                .then(response => {
+                currentChartData = response.historicalData;
+                renderCandlestickChart(response.historicalData, lastStrategyParams.get("interval"));
+                plotBuySellMarkers(response.trades);
+                populateTradeTable(response.trades, lastStrategyParams.get("interval"));
+            })
+                .catch(err => {
+                console.error("Error fetching ema-rsi strategy:", err);
+            });
+        };
+    }
+};
+
+function populateTradeTable(trades, interval) {
+    const tbody = document.querySelector("#tradeSummaryTable tbody");
+    const totalProfitCell = document.getElementById("totalProfit");
+    const totalLossCell = document.getElementById("totalLoss");
+    const totalCell = document.getElementById("totalPnL");
+
+    tbody.innerHTML = ""; // Clear existing rows
+    let totalProfit = 0;
+    let totalLoss = 0;
+    let total = 0;
+
+    trades.forEach((trade, index) => {
+        const row = document.createElement("tr");
+        const profit = trade.profit;
+
+        if (profit >= 0) {
+            totalProfit += profit;
+        } else {
+            totalLoss += profit;
+        }
+        total += profit;
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${formatDateTime(trade.buyTime, interval)}</td>
+            <td>₹${trade.buyPrice.toFixed(2)}</td>
+            <td>${formatDateTime(trade.sellTime, interval)}</td>
+            <td>₹${trade.sellPrice.toFixed(2)}</td>
+            <td>${formatSellType(trade.sellType)}</td>
+            <td class="${profit >= 0 ? 'profit' : 'loss'}">₹${profit.toFixed(2)}</td>
+            <td class="${trade.profitPercent >= 0 ? 'profit' : 'loss'}">${trade.profitPercent.toFixed(2)}%</td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    totalProfitCell.innerHTML = `<strong class="profit">₹${totalProfit.toFixed(2)}</strong>`;
+    totalLossCell.innerHTML = `<strong class="loss">₹${totalLoss.toFixed(2)}</strong>`;
+    totalCell.innerHTML = `<strong class="${total >= 0 ? 'profit' : 'loss'}">₹${total.toFixed(2)}</strong>`;
+
+    document.getElementById('tradeTableContainer').style.display = 'block';
+}
+
+function formatDateTime(dateStr, interval) {
+    const date = new Date(dateStr);
+
+    if (interval === "day") {
+        // Return only the date
+        return date.toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+    } else {
+        return date.toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        }) + ', ' + date.toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+    }
+}
+
+function formatSellType(type) {
+    switch (type) {
+        case "STRATEGY_SELL": return "STRATEGY_SELL";
+        case "STOP_LOSS_SELL": return "STOP_LOSS_SELL";
+        case "TAKE_PROFIT_SELL": return "TAKE_PROFIT_SELL";
+        case "FINAL_CLOSE": return "FINAL_CLOSE";
+        default: return "-";
+    }
 }

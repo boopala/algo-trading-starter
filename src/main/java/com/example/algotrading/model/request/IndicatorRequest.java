@@ -11,4 +11,6 @@ public class IndicatorRequest {
     public List<Double> low;
     public List<Double> close;
     public List<Double> volume;
+    public List<String> timeStamp;
+    public String interval;
 }

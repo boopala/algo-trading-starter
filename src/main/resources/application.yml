@@ -34,6 +34,8 @@ logging:
     com:
       example:
         algotrading: INFO
+  file:
+    name: logs/algotrading.log  # Path to your log file
 live:
   holdings:
     websocket:

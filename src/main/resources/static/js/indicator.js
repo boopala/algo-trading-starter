@@ -296,10 +296,11 @@ async function invokeCustomIndicator(indicator, period, validData) {
     const low = validData.map(d => d.low);
     const close = validData.map(d => d.close);
     const volume = validData.map(d => d.volume);
+    const timeStamp = validData.map(d => d.time);
     const response = await fetch('/api/indicators/customIndicator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ indicator, period, open, high, low, close, volume })
+        body: JSON.stringify({ indicator, period, open, high, low, close, volume, timeStamp, interval })
     });
     return response;
 }
@@ -345,4 +346,19 @@ window.addEventListener('DOMContentLoaded', () => {
         console.warn("toggleSR checkbox not found in the DOM.");
     }
 });
+
+/*window.addEventListener('DOMContentLoaded', () => {
+    const toggleTrades = document.getElementById('toggleTrades');
+    if (toggleTrades) {
+        toggleTrades.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                plotBuySellMarkers(latestTrades);
+            } else {
+                mainCandleSeries.setMarkers([]);
+            }
+        });
+    } else {
+        console.warn("toggleTrades checkbox not found in the DOM.");
+    }
+});*/
 

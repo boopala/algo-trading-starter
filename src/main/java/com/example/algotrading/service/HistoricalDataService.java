@@ -1,24 +1,25 @@
 package com.example.algotrading.service;
 
 import com.example.algotrading.data.repository.EquityRepository;
+import com.example.algotrading.model.SRDetectionParams;
+import com.example.algotrading.model.response.HistoricalData;
 import com.example.algotrading.util.HistoricalDataMapper;
 import com.zerodhatech.kiteconnect.KiteConnect;
 import com.zerodhatech.kiteconnect.kitehttp.exceptions.KiteException;
-import com.zerodhatech.models.HistoricalData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-public class BacktestService {
+public class HistoricalDataService {
+
     @Value("${kite.api-key}")
     private String apiKey;
 
@@ -47,6 +48,9 @@ public class BacktestService {
     @Autowired
     private SupportResistanceService supportResistanceService;
 
+    @Autowired
+    private IndicatorService indicatorService;
+
     private int getMaxDaysForInterval(String interval) {
         switch (interval) {
             case "3minute":
@@ -70,28 +74,7 @@ public class BacktestService {
         }
     }
 
-    private int getSwingWindowSize(String interval) {
-        String methodName = "getSwingWindowSize ";
-        log.info(methodName + "entry");
-        switch (interval) {
-            case "3minute":
-            case "5minute":
-                return 2; // Intraday scalping – fast response
-            case "10minute":
-            case "15minute":
-                return 3; // Short-term intraday
-            case "30minute":
-            case "60minute":
-            case "hour":
-                return 4; // Medium-term swing trades
-            case "day":
-                return 5; // Long-term position trades
-            default:
-                return 2; // Fallback for unknown intervals
-        }
-    }
-
-    public List<com.example.algotrading.model.response.HistoricalData> getHistoricalData(String equityId, String fromDateStr, String toDateStr, String interval) throws Exception, KiteException {
+    public List<HistoricalData> getHistoricalData(String equityId, String fromDateStr, String toDateStr, String interval) throws Exception, KiteException {
         String methodName = "getHistoricalData ";
         log.info(methodName + "entry");
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -119,7 +102,7 @@ public class BacktestService {
                 chunkEnd = toDate;
             }
 
-            HistoricalData chunkData = kiteConnect.getHistoricalData(chunkStart, chunkEnd, instrumentToken, interval, false, false);
+            com.zerodhatech.models.HistoricalData chunkData = kiteConnect.getHistoricalData(chunkStart, chunkEnd, instrumentToken, interval, false, false);
             if (chunkData != null && chunkData.dataArrayList != null) {
                 allData.addAll(HistoricalDataMapper.mapFromKite(chunkData.dataArrayList));
             }
@@ -128,10 +111,49 @@ public class BacktestService {
 
         // Optionally, sort allData by date if needed
         allData.sort(Comparator.comparing(d -> d.timeStamp));
-        int windowSize = getSwingWindowSize(interval);
+        int windowSize = indicatorService.getSwingWindowSize(interval);
         log.info(methodName + "windowSize: {}", windowSize);
-        supportResistanceService.markSwingHighLow(allData, windowSize);
+        SRDetectionParams srDetectionParams = indicatorService.getSRDetectionParams(interval);
+        supportResistanceService.detectSupportResistance(allData, srDetectionParams.lookBack, srDetectionParams.lookAhead, srDetectionParams.thresholdPercent);
+        //supportResistanceService.markSwingHighLow(allData, windowSize);
+        List<HistoricalData> merged = mergeDuplicateHistoricalData(allData);
         log.info(methodName + "exit");
-        return allData;
+        return merged;
     }
+
+    private List<HistoricalData> mergeDuplicateHistoricalData(List<HistoricalData> data) {
+        String methodName = "mergeDuplicateHistoricalData ";
+        log.info(methodName + "entry");
+
+        Map<String, HistoricalData> mergedMap = new LinkedHashMap<>();
+        int mergeCount = 0;
+
+        for (HistoricalData d : data) {
+            HistoricalData existing = mergedMap.get(d.timeStamp);
+
+            if (existing == null) {
+                // First occurrence, put directly
+                HistoricalData first = new HistoricalData();
+                first.timeStamp = d.timeStamp;
+                first.open = d.open;
+                first.high = d.high;
+                first.low = d.low;
+                first.close = d.close;
+                first.volume = d.volume;
+                mergedMap.put(d.timeStamp, first);
+            } else {
+                // Duplicate found — merge values
+                existing.high = Math.max(existing.high, d.high);
+                existing.low = Math.min(existing.low, d.low);
+                existing.close = d.close;  // Assume last close is desired
+                existing.volume += d.volume;
+                mergeCount++;
+            }
+        }
+
+        log.info("{} duplicate bars were merged.", mergeCount);
+        log.info(methodName + "exit");
+        return new ArrayList<>(mergedMap.values());
+    }
+
 }
