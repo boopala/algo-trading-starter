@@ -46,4 +46,16 @@ public class EquityBatchScheduler {
         inputStream.close();
         log.info(methodName + "exit");
     }
+
+    public void updateEquityExpiry() throws IOException {
+        String methodName = "updateEquityExpiry ";
+        log.info(methodName + "entry");
+        String url = kiteTradeUrl + "/instruments";
+        log.debug(methodName + "kite instruments url: {}", url);
+        ResponseEntity<byte[]> response = restTemplate.exchange(url, HttpMethod.GET, null, byte[].class);
+        InputStream inputStream = new ByteArrayInputStream(Objects.requireNonNull(response.getBody()));
+        equityBatchService.updateEquityExpiry(inputStream);
+        inputStream.close();
+        log.info(methodName + "exit");
+    }
 }

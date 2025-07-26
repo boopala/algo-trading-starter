@@ -9,6 +9,7 @@ let mainChart, mainCandleSeries;
 let crosshairHandler;
 let currentChartData = [];
 let interval = '';
+var macdChart = null;
 
 function showOhlcInfo(bar, interval) {
     const ohlcBar = document.getElementById('ohlc-info-bar');
@@ -109,13 +110,6 @@ function submitEquity() {
     const endDate = document.getElementById('endDate').value;
     interval = document.getElementById('intervalSelect').value;
 
-    /*const params = new URLSearchParams({
-        equityId: selectedId.value,
-        fromDate: startDate,
-        toDate: endDate,
-        interval: interval
-    });*/
-
     params.append("equityId", selectedId.value);
     params.append("fromDate", startDate);
     params.append("toDate", endDate);
@@ -172,21 +166,6 @@ function loadBackTestPanel() {
     });
 }
 
-// Helper: get time value in correct format for Lightweight Charts
-function getTimeValue(d, interval) {
-    const date = new Date(d.timeStamp);
-    if (interval === 'day') {
-        return {
-            year: date.getFullYear(),
-            month: date.getMonth() + 1,
-            day: date.getDate()
-        };
-    } else {
-        return Math.floor(date.getTime() / 1000);
-    }
-}
-
-
 function renderCandlestickChart(data, interval) {
     const uniqueData = [];
     clearChartOnNewInterval();
@@ -206,22 +185,14 @@ function renderCandlestickChart(data, interval) {
             secondsVisible: false
         },
         localization: {
-            timeFormatter: (time) => {
-                if (typeof time === 'object' && time.year) {
-                    // BusinessDay format
-                    return `${String(time.day).padStart(2, '0')}-${String(time.month).padStart(2, '0')}-${time.year}`;
-                } else {
-                    // UNIX timestamp (seconds)
-                    const date = new Date(time * 1000);
-                    return date.toLocaleString('en-IN', {
-                        timeZone: 'Asia/Kolkata',
-                        day: '2-digit', month: 'short', year: 'numeric',
-                        hour: interval === 'day' ? undefined : '2-digit',
-                        minute: interval === 'day' ? undefined : '2-digit'
-                    });
-                }
-            }
+            timeFormatter: (time) => indiaTimeFormatter(time, interval)
         }
+    });
+    registerChartForSync(mainChart);
+    requestAnimationFrame(() => {
+        registerYAxisSync(mainChart);
+        if (rsiChart) registerYAxisSync(rsiChart);
+        if (macdChart) registerYAxisSync(macdChart);
     });
 
     // Clean and deduplicate data
@@ -276,84 +247,8 @@ function renderCandlestickChart(data, interval) {
 
     document.getElementById('candlestickChartContainer').style.display = 'flex';
     document.getElementById('candlestickChartContainer').style.flexDirection = 'column';
+    document.getElementById('macdModalOverlay').style.display = 'none';
 }
-
-function clearChartOnNewInterval() {
-    // Remove all indicator series
-    clearAllIndicators();
-    if (mainChart) {
-        mainChart.remove();
-        mainChart = null; // Allow clean re-creation
-    }
-}
-
-function cleanCandlestickData(data, interval) {
-    return data
-        .filter(d =>
-    d.open !== null && d.open !== undefined &&
-    d.high !== null && d.high !== undefined &&
-    d.low !== null && d.low !== undefined &&
-    d.close !== null && d.close !== undefined &&
-    d.volume !== null && d.volume !== undefined &&
-    d.timeStamp !== null && d.timeStamp !== undefined
-    )
-        .map(d => ({
-        open: Number(d.open),
-        high: Number(d.high),
-        low: Number(d.low),
-        close: Number(d.close),
-        volume: Number(d.volume),
-        time: getTimeValue(d, interval)
-    })).sort((a, b) => {
-        if (typeof a.time === 'string' && typeof b.time === 'string') {
-            return a.time.localeCompare(b.time);
-        }
-        return a.time - b.time;
-    });
-}
-
-// Sample: Add support/resistance markers
-function plotSupportResistanceMarkers(dataWithLevels) {
-    const markers = [];
-
-    dataWithLevels.forEach(point => {
-        const time = new Date(point.timeStamp).getTime() / 1000; // convert ms to seconds
-
-        if (point.support) {
-            markers.push({
-                time: time,
-                position: 'belowBar',
-                color: '#26a69a', // Green for support
-                shape: 'arrowUp',
-                text: 'Support'
-            });
-        }
-
-        if (point.resistance) {
-            markers.push({
-                time: time,
-                position: 'aboveBar',
-                color: '#ef5350', // Red for resistance
-                shape: 'arrowDown',
-                text: 'Resistance'
-            });
-        }
-    });
-
-    mainCandleSeries.setMarkers(markers);
-}
-
-function formatToChartTime(dateString) {
-    const date = new Date(dateString);
-    return {
-        year: date.getUTCFullYear(),
-        month: date.getUTCMonth() + 1,
-        day: date.getUTCDate(),
-        hour: date.getUTCHours(),
-        minute: date.getUTCMinutes()
-    };
-}
-
 
 function plotBuySellMarkers(trades) {
     const markers = [];
@@ -408,6 +303,127 @@ window.onload = function () {
     document.getElementById('clearIndicatorsBtn').onclick = clearAllIndicators;
     const closeBtn = document.getElementById('closeEmaRsiModal');
     const confirmBtn = document.getElementById('confirmEmaRsi');
+    //const macdCloseBtn = document.getElementById('closeMacdModal');
+    //const macdConfirmBtn = document.getElementById('confirmMacdBtn');
+
+    /*if (macdCloseBtn) {
+        macdCloseBtn.onclick = () => {
+            document.getElementById('macdModal').style.display = 'none';
+        };
+    }*/
+
+    /*if (macdConfirmBtn) {
+        macdConfirmBtn.onclick = async () => {
+            const macdShort = parseInt(document.getElementById('macdShort').value);
+            const macdLong = parseInt(document.getElementById('macdLong').value);
+            const macdSignal = parseInt(document.getElementById('macdSignal').value);
+
+            if (macdShort >= macdLong) {
+                alert("MACD Short EMA must be less than MACD Long EMA");
+                return;
+            }
+
+            document.getElementById('macdModal').style.display = 'none';
+            const open = validData.map(d => d.open);
+            const high = validData.map(d => d.high);
+            const low = validData.map(d => d.low);
+            const close = validData.map(d => d.close);
+            const volume = validData.map(d => d.volume);
+            const timeStamp = validData.map(d => toUnixTime(d.time));
+            const indicator = document.getElementById('indicatorSelect').value;
+
+            const response = await fetch(`/api/indicators/customIndicator`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    indicator,
+                    macdShort,
+                    macdLong,
+                    macdSignal,
+                    open,
+                    high,
+                    low,
+                    close,
+                    volume,
+                    timeStamp,
+                    interval
+                })
+            });
+
+            const result = await response.json();
+            const macdKey = `MACD_${macdShort}_${macdLong}_${macdSignal}`;
+
+            const macdData = result.macdValues.map((val, idx) => ({ time: validData[idx].time, value: val }));
+            const signalData = result.signalValues.map((val, idx) => ({ time: validData[idx].time, value: val }));
+            const histogramData = result.histogramValues.map((val, idx) => ({ time: validData[idx].time, value: val }));
+
+            // Remove old MACD chart if any
+            if (indicatorSeriesMap[macdKey]) {
+                const info = indicatorSeriesMap[macdKey];
+                if (Array.isArray(info.series)) {
+                    info.series.forEach(s => info.chart.removeSeries(s));
+                } else {
+                    info.chart.removeSeries(info.series);
+                }
+                delete indicatorSeriesMap[macdKey];
+            }
+            if (macdChart && macdChart.remove) {
+                removeChartFromSync(macdChart);
+                macdChart.remove();
+                document.getElementById('macdChart').innerHTML = '';
+                macdChart = null;
+            }
+
+            // Create new MACD chart
+            const chartWidth = document.getElementById('candlestickChart').clientWidth;
+            const macdContainer = document.getElementById('macdChart');
+
+            macdChart = LightweightCharts.createChart(macdContainer, {
+                width: chartWidth,
+                height: 100,
+                layout: { background: { color: '#fff' }, textColor: '#000' },
+                grid: { vertLines: { color: '#eee' }, horzLines: { color: '#eee' } },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                rightPriceScale: {
+                    visible: true,
+                    scaleMargins: { top: 0.2, bottom: 0.1 }
+                },
+                timeScale: {
+                    visible: true,
+                    timeVisible: interval !== 'day',
+                    secondsVisible: false
+                },
+                localization: {
+                    timeFormatter: (time) => indiaTimeFormatter(time, interval)
+                }
+            });
+
+            const macdLine = window.macdChart.addLineSeries({ color: '#2196F3', lineWidth: 1 }); // blue
+            const signalLine = window.macdChart.addLineSeries({ color: '#FF9800', lineWidth: 1 }); // orange
+            const histogram = window.macdChart.addHistogramSeries({
+                color: '#9E9E9E',
+                lineWidth: 1,
+                priceFormat: { type: 'price' },
+                scaleMargins: { top: 0.2, bottom: 0 },
+            });
+
+            macdLine.setData(macdData);
+            signalLine.setData(signalData);
+            histogram.setData(histogramData);
+
+            indicatorSeriesMap[macdKey] = {
+                series: [macdLine, signalLine, histogram],
+                chart: window.macdChart,
+                meta: { macdShort, macdLong, macdSignal }
+            };
+
+            registerChartForSync(macdChart);
+            requestAnimationFrame(() => registerYAxisSync(macdChart));
+            renderIndicatorList();
+        };
+    }*/
 
     if (closeBtn) {
         closeBtn.onclick = () => {
@@ -502,37 +518,4 @@ function populateTradeTable(trades, interval) {
     totalCell.innerHTML = `<strong class="${total >= 0 ? 'profit' : 'loss'}">₹${total.toFixed(2)}</strong>`;
 
     document.getElementById('tradeTableContainer').style.display = 'block';
-}
-
-function formatDateTime(dateStr, interval) {
-    const date = new Date(dateStr);
-
-    if (interval === "day") {
-        // Return only the date
-        return date.toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-        });
-    } else {
-        return date.toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-        }) + ', ' + date.toLocaleTimeString('en-IN', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true
-        });
-    }
-}
-
-function formatSellType(type) {
-    switch (type) {
-        case "STRATEGY_SELL": return "STRATEGY_SELL";
-        case "STOP_LOSS_SELL": return "STOP_LOSS_SELL";
-        case "TAKE_PROFIT_SELL": return "TAKE_PROFIT_SELL";
-        case "FINAL_CLOSE": return "FINAL_CLOSE";
-        default: return "-";
-    }
 }

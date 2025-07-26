@@ -3,6 +3,53 @@ let rsiToMainHandler = null;
 let mainToRsiHandler = null;
 var rsiChart = null;
 
+document.addEventListener('DOMContentLoaded', function () {
+    const macdOverlay = document.getElementById('macdModalOverlay');
+    if (macdOverlay) {
+        macdOverlay.addEventListener('click', function (event) {
+            if (event.target === this) {
+                closeMacdModal();
+            }
+        });
+    }
+});
+
+
+function openMacdModal() {
+    const overlay = document.getElementById('macdModalOverlay');
+    if (overlay) {
+        overlay.style.display = 'flex'; // Centered with transparent bg
+        document.getElementById('macdModal').style.display = 'block';
+    }
+}
+function closeMacdModal() {
+    const overlay = document.getElementById('macdModalOverlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+        document.getElementById('macdModal').style.display = 'none';
+    }
+}
+
+function updatePeriodInputVisibility() {
+    const indicatorSelect = document.getElementById('indicatorSelect');
+    const periodInput = document.getElementById('periodInput');
+    const showFor = ['SMA', 'EMA', 'RSI'];
+    if (showFor.includes(indicatorSelect.value)) {
+        periodInput.style.display = '';
+    } else {
+        periodInput.style.display = 'none';
+    }
+}
+
+// Wait until DOM is loaded before attaching listeners
+document.addEventListener('DOMContentLoaded', function () {
+    const indicatorSelect = document.getElementById('indicatorSelect');
+    if (!indicatorSelect) return; // safety check
+
+    indicatorSelect.addEventListener('change', updatePeriodInputVisibility);
+    updatePeriodInputVisibility(); // Set initial state
+});
+
 function getIndicatorListElement() {
     return document.getElementById('indicatorList');
 }
@@ -58,14 +105,21 @@ async function applyCustomIndicator() {
         return;
     }
 
-    if (!indicator || !['SMA', 'EMA', 'Volume', 'RSI'].includes(indicator)) {
-        alert("Select SMA, EMA, Volume, or RSI.");
+    if (!indicator || !['SMA', 'EMA', 'Volume', 'RSI', 'MACD', 'VWAP'].includes(indicator)) {
+        alert("Select SMA, EMA, Volume, MACD, VWAP or RSI.");
         return;
     }
 
+    if (indicator === 'MACD') {
+        openMacdModal();
+        return; // wait for confirmation
+    }
+
+    // VWAP doesn't require a period
+    const key = indicator === 'VWAP' ? 'VWAP' : `${indicator}_${period}`;
+
     const response = await invokeCustomIndicator(indicator, period, validData);
     const result = await response.json();
-    const key = `${indicator}_${period}`;
 
     if (result.values && result.values.length) {
         if (indicatorSeriesMap[key]) {
@@ -92,34 +146,44 @@ async function applyCustomIndicator() {
                 return;
             }
             const chartWidth = mainChartContainer.clientWidth;
-            if (rsiChart) {
-                rsiChart.remove(); // remove old RSI chart if exists
-                rsiChart = null;
+            if (rsiChart && rsiChart.remove) {
+                removeChartFromSync(rsiChart);
+                rsiChart.remove();
             }
+            rsiChart = null;
             rsiChart = LightweightCharts.createChart(rsiChartContainer, {
                 width: chartWidth, height: 100,
                 layout: { background: { color: '#fff' }, textColor: '#000' },
                 grid: { vertLines: { color: '#eee' }, horzLines: { color: '#eee' } },
                 crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
                 rightPriceScale: {
+                    borderColor: '#ccc',
                     visible: true,
-                    scaleMargins: { top: 0.15, bottom: 0.15 }
+                    scaleMargins: { top: 0.05, bottom: 0.15 }
                 },
                 timeScale: {
                     visible: true,
-                    timeVisible: true,
+                    timeVisible: interval !== 'day',
                     secondsVisible: false
+                },
+                localization: {
+                    timeFormatter: (time) => indiaTimeFormatter(time, interval)
                 }
             });
-            subscribeRSISync();
+            registerChartForSync(rsiChart);
+            requestAnimationFrame(() => {
+                registerYAxisSync(mainChart);
+                if (rsiChart) registerYAxisSync(rsiChart);
+                if (macdChart) registerYAxisSync(macdChart);
+            });
             const rsiSeries = rsiChart.addLineSeries({
                 color,
-                lineWidth: width
+                lineWidth: width,
             });
             rsiSeries.setData(data);
             indicatorSeriesMap[key] = { series: rsiSeries, chart: rsiChart, meta: { color, width } };
         } else {
-            // Add new line series
+            // VWAP, SMA, EMA go on main chart
             const series = mainChart.addLineSeries({ color, lineWidth: width });
             series.setData(data);
             // Store series and its metadata
@@ -141,6 +205,19 @@ function removeSpecificIndicator(key) {
 
     const chart = info.chart || mainChart;
 
+    if (chart && typeof chart.timeScale === 'function') {
+        try {
+            chart.timeScale().unsubscribeVisibleTimeRangeChange(deferredYAxisSync);
+        } catch (e) {
+            console.warn('Failed to unsubscribe from time range sync:', e);
+        }
+    }
+
+    const idx = syncedCharts.indexOf(chart);
+    if (idx !== -1) {
+        syncedCharts.splice(idx, 1);
+    }
+
     if (Array.isArray(info.series)) {
         info.series.forEach(series => {
             if (series) chart.removeSeries(series);
@@ -155,12 +232,26 @@ function removeSpecificIndicator(key) {
 
     // If it's RSI, clear container
     if (key.startsWith('RSI')) {
-        const rsiChartContainer = document.getElementById('rsiChart');
-        if (rsiChartContainer) rsiChartContainer.innerHTML = '';
         if (typeof rsiChart !== 'undefined') {
+            removeChartFromSync(rsiChart);
+            rsiChart.remove();
             rsiChart = null;
         }
+
+        const rsiChartContainer = document.getElementById('rsiChart');
+        if (rsiChartContainer) rsiChartContainer.innerHTML = '';
     }
+
+    if (key.startsWith('MACD')) {
+        const macdChartContainer = document.getElementById('macdChart');
+        if (macdChartContainer) macdChartContainer.innerHTML = '';
+        if (typeof macdChart !== 'undefined') {
+            removeChartFromSync(macdChart);
+            macdChart.remove();
+            macdChart = null;
+        }
+    }
+
 }
 
 // Clear all indicators
@@ -189,106 +280,19 @@ function clearAllIndicators() {
 
     // RSI Chart cleanup (if RSI is created separately)
     if (rsiChart) {
-        unsubscribeRSISync && unsubscribeRSISync(); // optional if sync exists
+        // Clean up sync handlers from syncedCharts array
+        removeChartFromSync(rsiChart);
         rsiChart.remove();
         rsiChart = null;
     }
+
+    if (macdChart) {
+        removeChartFromSync(macdChart);
+        macdChart.remove();
+        macdChart = null;
+    }
     renderIndicatorList();
 }
-
-
-function initializeChartControls() {
-    const NAV_BARS = 20;
-    const chartLeftBtn = document.getElementById('chartLeftBtn');
-    const chartRightBtn = document.getElementById('chartRightBtn');
-    const chartFullscreenBtn = document.getElementById('chartFullscreenBtn');
-    const chartContainer = document.getElementById('candlestickChartContainer');
-
-    chartLeftBtn.onclick = function() {
-        if (mainChart) {
-            mainChart.timeScale().scrollToPosition(
-                mainChart.timeScale().scrollPosition() - NAV_BARS,
-                false
-            );
-        }
-    };
-
-    chartRightBtn.onclick = function() {
-        if (mainChart) {
-            mainChart.timeScale().scrollToPosition(
-                mainChart.timeScale().scrollPosition() + NAV_BARS,
-                false
-            );
-        }
-    };
-
-    chartFullscreenBtn.onclick = function() {
-        if (!document.fullscreenElement) {
-            chartContainer.requestFullscreen().catch(err => console.error("Fullscreen error:", err));
-        } else {
-            document.exitFullscreen();
-        }
-    };
-
-    // Centralized chart resizing function
-    function resizeCharts() {
-        const chartDiv = document.getElementById('candlestickChart');
-        const rsiDiv = document.getElementById('rsiChart');
-        const isFullScreen = document.fullscreenElement === chartContainer;
-        const width = chartContainer.clientWidth;
-
-        if (isFullScreen) {
-            const screenHeight = window.innerHeight;
-            const width = chartContainer.clientWidth;
-
-            const rsiDiv = document.getElementById('rsiChart');
-            const hasRSI = rsiDiv && rsiDiv.childElementCount > 0;
-
-            if (hasRSI) {
-                const mainHeight = Math.floor(screenHeight * 0.75);
-                const rsiHeight = screenHeight - mainHeight;
-
-                chartDiv.style.height = `${mainHeight}px`;
-                rsiDiv.style.height = `${rsiHeight}px`;
-
-                if (mainChart) mainChart.resize(width, mainHeight);
-                if (rsiChart) rsiChart.resize(width, rsiHeight);
-            } else {
-                chartDiv.style.height = `${screenHeight}px`;
-                if (mainChart) mainChart.resize(width, screenHeight);
-                if (rsiChart) rsiChart.resize(width, 0); // collapse RSI
-            }
-        } else {
-            chartDiv.style.width = '100%';
-            chartDiv.style.height = '400px';
-            if (mainChart) mainChart.resize(width, 400);
-
-            if (rsiDiv) {
-                rsiDiv.style.width = '100%';
-                rsiDiv.style.height = '100px';
-                rsiDiv.style.minHeight = '100px';
-                rsiDiv.style.display = 'block';
-                if (rsiChart) rsiChart.resize(width, 100);
-            }
-        }
-    }
-
-    let resizeTimeout;
-    function debounceResizeCharts() {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(resizeCharts, 100);
-    }
-
-    document.addEventListener('fullscreenchange', debounceResizeCharts);
-    window.addEventListener('resize', debounceResizeCharts);
-}
-
-window.onload = function() {
-    initializeChartControls();
-
-    document.getElementById('addIndicatorBtn').onclick = applyCustomIndicator;
-    document.getElementById('clearIndicatorsBtn').onclick = clearAllIndicators;
-};
 
 async function invokeCustomIndicator(indicator, period, validData) {
     const open = validData.map(d => d.open);
@@ -296,40 +300,13 @@ async function invokeCustomIndicator(indicator, period, validData) {
     const low = validData.map(d => d.low);
     const close = validData.map(d => d.close);
     const volume = validData.map(d => d.volume);
-    const timeStamp = validData.map(d => d.time);
+    const timeStamp = validData.map(d => toUnixTime(d.time));
     const response = await fetch('/api/indicators/customIndicator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ indicator, period, open, high, low, close, volume, timeStamp, interval })
     });
     return response;
-}
-
-function subscribeRSISync() {
-    rsiToMainHandler = () => {
-        if (mainChart && rsiChart) {
-            const mainRange = rsiChart.timeScale().getVisibleRange();
-            if (mainRange) mainChart.timeScale().setVisibleRange(mainRange);
-        }
-    };
-    mainToRsiHandler = () => {
-        if (mainChart && rsiChart) {
-            const rsiRange = mainChart.timeScale().getVisibleRange();
-            if (rsiRange) rsiChart.timeScale().setVisibleRange(rsiRange);
-        }
-    };
-
-    rsiChart.timeScale().subscribeVisibleTimeRangeChange(rsiToMainHandler);
-    mainChart.timeScale().subscribeVisibleTimeRangeChange(mainToRsiHandler);
-}
-
-function unsubscribeRSISync() {
-    if (rsiChart && rsiToMainHandler) {
-        rsiChart.timeScale().unsubscribeVisibleTimeRangeChange(rsiToMainHandler);
-    }
-    if (mainChart && mainToRsiHandler) {
-        mainChart.timeScale().unsubscribeVisibleTimeRangeChange(mainToRsiHandler);
-    }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -347,18 +324,154 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-/*window.addEventListener('DOMContentLoaded', () => {
-    const toggleTrades = document.getElementById('toggleTrades');
-    if (toggleTrades) {
-        toggleTrades.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                plotBuySellMarkers(latestTrades);
-            } else {
-                mainCandleSeries.setMarkers([]);
-            }
-        });
-    } else {
-        console.warn("toggleTrades checkbox not found in the DOM.");
-    }
-});*/
+// Sample: Add support/resistance markers
+function plotSupportResistanceMarkers(dataWithLevels) {
+    const markers = [];
 
+    dataWithLevels.forEach(point => {
+        const time = new Date(point.timeStamp).getTime() / 1000; // convert ms to seconds
+
+        if (point.support) {
+            markers.push({
+                time: time,
+                position: 'belowBar',
+                color: '#26a69a', // Green for support
+                shape: 'arrowUp',
+                text: 'Support'
+            });
+        }
+
+        if (point.resistance) {
+            markers.push({
+                time: time,
+                position: 'aboveBar',
+                color: '#ef5350', // Red for resistance
+                shape: 'arrowDown',
+                text: 'Resistance'
+            });
+        }
+    });
+
+    mainCandleSeries.setMarkers(markers);
+}
+
+async function applyMacd() {
+    const macdShort = parseInt(document.getElementById('macdShort').value);
+    const macdLong = parseInt(document.getElementById('macdLong').value);
+    const macdSignal = parseInt(document.getElementById('macdSignal').value);
+
+    if (macdShort >= macdLong) {
+        alert("MACD Short EMA must be less than MACD Long EMA");
+        return;
+    }
+
+    // Hide modal (entire overlay or just modal body as you prefer)
+    const overlay = document.getElementById('macdModalOverlay');
+    if (overlay) overlay.style.display = 'none';
+
+    const open = validData.map(d => d.open);
+    const high = validData.map(d => d.high);
+    const low = validData.map(d => d.low);
+    const close = validData.map(d => d.close);
+    const volume = validData.map(d => d.volume);
+    const timeStamp = validData.map(d => toUnixTime(d.time));
+    const indicator = document.getElementById('indicatorSelect').value;
+
+    const response = await fetch(`/api/indicators/customIndicator`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            indicator,
+            macdShort,
+            macdLong,
+            macdSignal,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            timeStamp,
+            interval
+        })
+    });
+
+    const result = await response.json();
+    const macdKey = `MACD_${macdShort}_${macdLong}_${macdSignal}`;
+
+    const macdData = result.macdValues.map((val, idx) => ({ time: validData[idx].time, value: val }));
+    const signalData = result.signalValues.map((val, idx) => ({ time: validData[idx].time, value: val }));
+    const histogramData = result.histogramValues.map((val, idx) => ({
+        time: validData[idx].time,
+        value: val,
+        color: val >= 0 ? '#26a69a' : '#ef5350' // green for positive, red for negative
+    }));
+
+    // Remove old MACD if present
+    if (indicatorSeriesMap[macdKey]) {
+        const info = indicatorSeriesMap[macdKey];
+        if (Array.isArray(info.series)) {
+            info.series.forEach(s => info.chart.removeSeries(s));
+        } else {
+            info.chart.removeSeries(info.series);
+        }
+        delete indicatorSeriesMap[macdKey];
+    }
+    if (macdChart && macdChart.remove) {
+        removeChartFromSync(macdChart);
+        macdChart.remove();
+        document.getElementById('macdChart').innerHTML = '';
+        macdChart = null;
+    }
+
+    // Create new chart
+    const chartWidth = document.getElementById('candlestickChart').clientWidth;
+    const macdContainer = document.getElementById('macdChart');
+    macdChart = LightweightCharts.createChart(macdContainer, {
+        width: chartWidth,
+        height: 100,
+        layout: { background: { color: '#fff' }, textColor: '#000' },
+        grid: { vertLines: { color: '#eee' }, horzLines: { color: '#eee' } },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        rightPriceScale: {
+            borderColor: '#ccc',
+            visible: true,
+            scaleMargins: { top: 0.05, bottom: 0.1 }
+        },
+        timeScale: {
+            visible: true,
+            timeVisible: interval !== 'day',
+            secondsVisible: false
+        },
+        localization: {
+            timeFormatter: (time) => indiaTimeFormatter(time, interval)
+        }
+    });
+
+    const macdLine = macdChart.addLineSeries({ color: '#2196F3', lineWidth: 1 }); // blue
+    const signalLine = macdChart.addLineSeries({ color: '#FF9800', lineWidth: 1 }); // orange
+    const histogram = macdChart.addHistogramSeries({
+        lineWidth: 1,
+        priceFormat: { type: 'price' },
+        scaleMargins: { top: 0.2, bottom: 0 },
+    });
+
+    macdLine.setData(macdData);
+    signalLine.setData(signalData);
+    histogram.setData(histogramData);
+
+    indicatorSeriesMap[macdKey] = {
+        series: [macdLine, signalLine, histogram],
+        chart: macdChart,
+        meta: { macdShort, macdLong, macdSignal }
+    };
+
+    registerChartForSync(macdChart);
+    requestAnimationFrame(() => {
+        registerYAxisSync(mainChart);
+        if (rsiChart) registerYAxisSync(rsiChart);
+        if (macdChart) registerYAxisSync(macdChart);
+    });
+    renderIndicatorList();
+}

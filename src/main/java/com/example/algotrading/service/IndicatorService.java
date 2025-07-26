@@ -152,8 +152,8 @@ public class IndicatorService {
                 return new CustomIndicatorResponse(values);
 
             case "MACD":
-                MACDIndicator macd = new MACDIndicator(closePrice, 12, 26);
-                EMAIndicator macdSignal = new EMAIndicator(macd, 9);
+                MACDIndicator macd = new MACDIndicator(closePrice, req.getMacdShort(), req.getMacdLong());
+                EMAIndicator macdSignal = new EMAIndicator(macd, req.getMacdSignal());
 
                 List<Double> macdList = new ArrayList<>();
                 List<Double> signalList = new ArrayList<>();
@@ -169,6 +169,36 @@ public class IndicatorService {
                     histogramList.add(histogram);
                 }
                 return new CustomIndicatorResponse(macdList, signalList, histogramList);
+
+            case "VWAP":
+                List<Double> vwapValues = new ArrayList<>();
+                Num cumulativePV = series.numOf(0);
+                Num cumulativeVolume = series.numOf(0);
+                ZonedDateTime currentDay = null;
+
+                for (int i = 0; i < series.getBarCount(); i++) {
+                    Bar bar = series.getBar(i);
+                    ZonedDateTime barDate = bar.getEndTime().withZoneSameInstant(ZoneId.of("Asia/Kolkata")).toLocalDate().atStartOfDay(ZoneId.of("Asia/Kolkata"));
+
+                    if (!barDate.equals(currentDay)) {
+                        // Reset for new day
+                        cumulativePV = series.numOf(0);
+                        cumulativeVolume = series.numOf(0);
+                        currentDay = barDate;
+                    }
+
+                    Num typicalPrice = bar.getHighPrice().plus(bar.getLowPrice()).plus(bar.getClosePrice()).dividedBy(series.numOf(3));
+                    Num pv = typicalPrice.multipliedBy(bar.getVolume());
+
+                    cumulativePV = cumulativePV.plus(pv);
+                    cumulativeVolume = cumulativeVolume.plus(bar.getVolume());
+
+                    Num vwap = cumulativeVolume.isZero() ? series.numOf(0) : cumulativePV.dividedBy(cumulativeVolume);
+                    vwapValues.add(vwap.doubleValue());
+                }
+
+                return new CustomIndicatorResponse(vwapValues);
+
 
             default:
                 throw new IllegalArgumentException("Unknown indicator: " + req.indicator);

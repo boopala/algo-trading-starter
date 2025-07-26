@@ -131,6 +131,7 @@ button:disabled {
     z-index: 9999;
     display: flex;
     flex-direction: column;
+    overflow: visible;
 }
 
 #candlestickChartContainer:fullscreen #candlestickChart {
@@ -198,7 +199,7 @@ button:disabled {
     opacity: 0.5;
 }
 
-#rsiChart {
+#rsiChart, #macdChart {
     width: 100% !important;
     height: 100px !important; /* RSI chart height smaller */
     margin-top: 10px;
@@ -307,5 +308,11 @@ button:disabled {
 .loss {
     color: red;
     font-weight: bold;
+}
+
+.pane-price-scale {
+    min-width: 60px !important;
+    width: 60px !important;
+    max-width: 60px !important;
 }
 

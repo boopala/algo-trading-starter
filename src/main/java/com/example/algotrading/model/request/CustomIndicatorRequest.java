@@ -8,4 +8,7 @@ import lombok.EqualsAndHashCode;
 public class CustomIndicatorRequest extends IndicatorRequest {
     public String indicator; // e.g., "SMA", "EMA", "RSI"
     public int period;
+    private Integer macdShort;
+    private Integer macdLong;
+    private Integer macdSignal;
 }

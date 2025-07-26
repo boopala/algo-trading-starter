@@ -1,0 +1,36 @@
+#macdModalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex; /* ENFORCE flex layout for centering */
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.3); /* semi-transparent overlay */
+    z-index: 9999;
+}
+
+#macdModal {
+    background: rgba(255, 255, 255, 0.9); /* semi-transparent white */
+    padding: 24px 32px;
+    border-radius: 10px;
+    min-width: 340px;
+    max-width: 95vw;
+    box-shadow: 0 6px 32px rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 10000;
+    backdrop-filter: blur(6px);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.modal-body label {
+    display: block;
+    margin-bottom: 8px;
+}

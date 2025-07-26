@@ -29,4 +29,5 @@ public class Equity extends BaseEntity {
     @JoinColumn(name = "exchange_id")
     private Exchange exchange;
     private boolean isDeleted;
+    private String expiry;
 }

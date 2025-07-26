@@ -1,0 +1,27 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd">
+
+    <changeSet id="7" author="boopal">
+        <addColumn tableName="equity">
+            <column name="expiry" type="VARCHAR(100)" defaultValue="null"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="expiry"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="8" author="boopal">
+        <sql>
+            CREATE UNIQUE INDEX uk_equity_instrument_token_active
+            ON equity (instrument_token)
+            WHERE is_deleted = false;
+        </sql>
+        <rollback>
+            DROP INDEX uk_equity_instrument_token_active;
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

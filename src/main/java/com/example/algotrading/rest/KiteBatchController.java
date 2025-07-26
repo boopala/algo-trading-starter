@@ -32,4 +32,20 @@ public class KiteBatchController {
         return message;
     }
 
+    @PostMapping("/updateEquityExpiry")
+    public String updateEquityExpiry() {
+        String methodName = "updateEquityExpiry ";
+        log.info(methodName + "entry");
+        String message;
+        try {
+            equityBatchScheduler.updateEquityExpiry();
+            message = "Expiry update is successful";
+        } catch (Exception e) {
+            log.error(methodName + "Exception occurred ", e);
+            message = "Expiry update failed: Check log for more info";
+        }
+        log.info(methodName + "exit");
+        return message;
+    }
+
 }
